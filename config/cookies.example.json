@@ -1,0 +1,14 @@
+{
+  "zhihu": {
+    "domain": ".zhihu.com",
+    "cookies": []
+  },
+  "baidu_wenku": {
+    "domain": ".baidu.com",
+    "cookies": []
+  },
+  "weixin": {
+    "domain": ".weixin.qq.com",
+    "cookies": []
+  }
+}

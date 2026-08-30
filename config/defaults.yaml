@@ -1,0 +1,52 @@
+# deep-dive default configuration
+#
+# This file is loaded by `deep_dive.config.load_config()` if no
+# user-level config exists (~/.deep-dive/config.yaml). CLI flags and
+# environment variables override values defined here.
+#
+# To customize: copy this file to ~/.deep-dive/config.yaml and edit,
+# OR set the env var DEEP_DIVE_CONFIG=/path/to/your.yaml
+# OR pass --config=/path/to/your.yaml (not yet implemented).
+
+# --- Output --------------------------------------------------------------------
+output_dir: tmp/deep-dive          # Where <topic>__<run-id>/ directories live
+depth: normal                      # quick | normal | full
+lang: auto                         # auto | zh | en
+freshness: ""                      # "" | day | week | month | year
+search_engine: auto                # auto | mmx | tavily
+no_tavily: false                   # When true, only use MMX (no Tavily fallback)
+
+# --- Concurrency / timeouts ----------------------------------------------------
+max_workers: 2                     # Parallel task concurrency (Tavily rate-limit guard)
+task_timeout_s: 240                # Per-task subprocess timeout
+global_timeout_s: 900              # Watchdog for the whole run
+heartbeat_interval_s: 10           # Heartbeat print interval
+
+# --- Quality thresholds --------------------------------------------------------
+min_chars: 1500                     # URLs with chars < this -> low-quality page
+relevance:
+  min_hitrate: 0.30                # Stage 1: single-char keyword density threshold
+  core_entity_min_hitrate: 0.40    # Stage 2: core-entity coverage threshold
+  relevance_threshold: 0.40        # Plan-level gate; rejects off-topic content
+
+# --- Depth presets -------------------------------------------------------------
+# Override individual numbers if you want a different topk/max_queries balance.
+depth_config:
+  quick:
+    topk: 14
+    max_queries: 4
+  normal:
+    topk: 18
+    max_queries: 8
+  full:
+    topk: 22
+    max_queries: 14
+
+# --- Logging -------------------------------------------------------------------
+log_level: INFO                    # DEBUG | INFO | WARNING | ERROR
+debug: false                       # Write <topic_dir>/debug/ with per-step state
+
+# --- API keys (do NOT commit real keys) ---------------------------------------
+# Prefer env vars TAVILY_API_KEY and TAVILY_API_KEY_BACKUP instead.
+# tavily_api_key: tvly-...
+# tavily_api_key_backup: tvly-...

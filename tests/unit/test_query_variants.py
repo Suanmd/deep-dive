@@ -1,0 +1,27 @@
+"""Tests for query variant generation."""
+
+from __future__ import annotations
+
+import pytest
+
+from deep_dive.constants import VARIANT_KEYS
+from deep_dive.query_variants import has_variant
+
+# _chinese_to_english has been removed; see TestChineseToEnglish skip below.
+_chinese_to_english = None
+
+
+class TestHasVariant:
+    def test_present_and_nonempty(self):
+        v = {"a": "value", "b": ""}
+        assert has_variant(v, "a") is True
+
+    def test_empty_value(self):
+        v = {"a": ""}
+        assert has_variant(v, "a") is False
+
+    def test_missing_key(self):
+        v = {}
+        assert has_variant(v, "a") is False
+
+

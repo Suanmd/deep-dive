@@ -1,0 +1,14 @@
+# CODEOWNERS
+# Each line is a file pattern followed by one or more owners.
+# Order matters: later patterns override earlier ones.
+
+# Default: any change requires review from the maintainer.
+/                                          @Suanmd
+
+# Crawler / engine code needs engine-team review.
+/src/deep_dive/crawler/                     @Suanmd
+/src/deep_dive/crawler/engines/             @Suanmd
+/src/deep_dive/crawler/fetchers/            @Suanmd
+
+# Reporting needs doc-team review.
+/src/deep_dive/reporting/                   @Suanmd

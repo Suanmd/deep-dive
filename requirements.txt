@@ -1,0 +1,10 @@
+# Runtime dependencies for deep-dive
+# Install: pip install -r requirements.txt
+# After install, run: playwright install chromium
+# Optional: install mmx CLI separately (https://docs.openclaw.ai/mmx) if you want
+# the MMX engine; otherwise deep-dive will gracefully fall back to Tavily only.
+
+trafilatura>=1.6.0
+tavily-python>=0.3.0
+playwright>=1.40.0
+cloudscraper>=1.2.71
