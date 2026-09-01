@@ -109,7 +109,9 @@ class Aggregator:
         # typical, this is ~100-200 ms total. Acceptable for the
         # report-generation step (not in the search hot path).
         content_dedup_removed = _content_fingerprint_dedup(
-            url_to_meta, url_sources, url_query_indices,
+            url_to_meta,
+            url_sources,
+            url_query_indices,
         )
         if content_dedup_removed:
             safe_print(
@@ -123,7 +125,9 @@ class Aggregator:
         # Sits AFTER fingerprint dedup so the expensive pairwise scan
         # only sees genuinely distinct URLs.
         paraphrase_removed = _paraphrase_dedup(
-            url_to_meta, url_sources, url_query_indices,
+            url_to_meta,
+            url_sources,
+            url_query_indices,
         )
         if paraphrase_removed:
             safe_print(
@@ -136,7 +140,7 @@ class Aggregator:
 
         # Resolve n_total (the aggregator doesn't mutate the input)
         try:
-            n_total = len(task_results)
+            n_total = len(list(task_results))
         except TypeError:
             n_total = 0
 
@@ -196,8 +200,20 @@ def _entry_to_fetch_result(
         extra={
             k: v
             for k, v in entry.items()
-            if k not in {"url", "status", "title", "chars", "html_file", "html_path",
-                         "txt_file", "txt_path", "error", "source_task", "query_index"}
+            if k
+            not in {
+                "url",
+                "status",
+                "title",
+                "chars",
+                "html_file",
+                "html_path",
+                "txt_file",
+                "txt_path",
+                "error",
+                "source_task",
+                "query_index",
+            }
         },
     )
 
@@ -365,7 +381,7 @@ def _ngram_set(text: str, n: int = _PARAPHRASE_NGRAM) -> frozenset[str]:
     """
     if not text or len(text) < n:
         return frozenset()
-    return frozenset(text[i:i + n] for i in range(len(text) - n + 1))
+    return frozenset(text[i : i + n] for i in range(len(text) - n + 1))
 
 
 def _paraphrase_dedup(
@@ -426,7 +442,7 @@ def _paraphrase_dedup(
         if not ng_i:
             continue
         host_i = urlparse(url_i).netloc.lower()
-        for url_j in urls_sorted[i + 1:]:
+        for url_j in urls_sorted[i + 1 :]:
             if url_j not in url_to_meta:
                 continue
             ng_j = ngrams.get(url_j, frozenset())
@@ -451,12 +467,8 @@ def _paraphrase_dedup(
             if jaccard > threshold:
                 # Drop the shorter one (url_j). Sources + indices migrate
                 # to the kept URL so the audit trail isn't lost.
-                url_sources.setdefault(url_i, []).extend(
-                    url_sources.pop(url_j, [])
-                )
-                url_query_indices.setdefault(url_i, []).extend(
-                    url_query_indices.pop(url_j, [])
-                )
+                url_sources.setdefault(url_i, []).extend(url_sources.pop(url_j, []))
+                url_query_indices.setdefault(url_i, []).extend(url_query_indices.pop(url_j, []))
                 del url_to_meta[url_j]
                 removed += 1
                 same_dom = host_i == host_j

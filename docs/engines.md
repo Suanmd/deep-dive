@@ -60,21 +60,25 @@ stderr 包含以下任一关键词时判定为 quota：
 
 ## Tavily 引擎详解
 
-### 双 key 自动 fallback
+### N-key 自动 fallback
 
-```
-TAVILY_API_KEY      → KEY1（主）
-TAVILY_API_KEY_BACKUP → KEY2（备用）
-```
+Tavily 引擎支持任意个 key 的池化自动 fallback
 
-检测到 quota / forbidden / unauthorized / invalid / rate limit 时自动切 KEY2：
+**推荐：N-key 池（v1.0 新写法）**：
 
-```
-[TAVILY-FALLBACK] KEY1 quota exhausted → trying KEY2
-[TAVILY-FALLBACK] used KEY2 (earlier key failed) for query='...' got 8 urls
+```powershell
+# TAVILY_API_KEYS 接受任意个 key，逗号分隔
+$env:TAVILY_API_KEYS = "tvly-key1,tvly-key2,tvly-key3"
+# 或更多：$env:TAVILY_API_KEYS = "k1,k2,k3,k4,k5"
 ```
 
-两个 key 都失败 → 返回 []，不抛错（orchestrator 不知道是 quota 还是网络问题，统一走 `no_results`）。
+```
+TAVILY_API_KEYS="k1,k2,k3"  → KEY1, KEY2, KEY3（任意 N 个）
+```
+
+检测到 quota / forbidden / unauthorized / invalid / rate lim
+
+**全部 N 个 key 都失败** → 抛 `SearchEngineQuotaError`，orchestrator 触发 DuckDuckGo 兜底（无 key 无 quota）。
 
 ### 配置方式
 

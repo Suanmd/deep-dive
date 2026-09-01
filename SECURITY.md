@@ -17,7 +17,7 @@ to report privately. We will:
 - Triage within 7 days
 - Patch + release within 30 days for high-severity issues
 
-## ⚠️ Secrets — What NEVER Goes Into This Repo
+## 🔒 Secrets — What NEVER Goes Into This Repo
 
 | Secret | Where it goes | Why |
 |--------|---------------|-----|
@@ -29,13 +29,9 @@ to report privately. We will:
 `config/cookies.json` is in `.gitignore`. A safe template is committed at
 `config/cookies.example.json` with empty arrays — no real credentials.
 
-## ✅ Sanitisation Before Publishing
-
-When sharing log output, `summary.json`, or `report.md` that may contain
-sensitive URLs or query strings, scrub them first:
+## 🧹 Sanitisation Before Publishing
 
 ```bash
-# Remove query-string tokens
 python -c "
 import json, re
 with open('summary.json') as f:
@@ -50,9 +46,7 @@ print(json.dumps(data, indent=2, ensure_ascii=False))
 " > summary.sanitized.json
 ```
 
-## 🛡️ Hardening Checklist
-
-When running deep-dive in production:
+## 🛡️ Hardening Checklist (Production)
 
 - [ ] Use a dedicated / throwaway account for cookie-based crawling.
 - [ ] Rotate cookies every 30–90 days (most sites invalidate stale sessions).
@@ -61,29 +55,35 @@ When running deep-dive in production:
 - [ ] Log `summary.json` and `metadata.json` only to private storage.
 - [ ] Respect `robots.txt` for sites that publish it (this tool does not, by design).
 
-## 📚 Known Anti-Crawl Behaviours
-
-Some sites actively block scrapers. deep-dive works around them via:
-
-- `cloudscraper` for Cloudflare-protected sites.
-- Cookie injection for login-walled sites (Zhihu, Baidu Wenku, WeChat).
-- Human-behaviour simulation (random scroll + click) for sites that fingerprint.
-
-If a site starts blocking you:
-
-1. Wait 24–48 hours (rate-limit cooldown).
-2. Reduce `--max-workers` to 1.
-3. Add fresh cookies to `config/cookies.json`.
-4. Consider asking the site owner for API access.
-
-## 🔗 Dependency Security
-
-Minimum versions are pinned in `requirements.txt`. To audit:
+## 📦 Dependency Security
 
 ```bash
 pip install pip-audit
 pip-audit -r requirements.txt
 ```
 
-Please report any high/critical findings via the vulnerability reporting
-channel above.
+Please report any high/critical findings via the vulnerability reporting channel above.
+
+## 🛠️ Code Security (Bandit)
+
+```bash
+pip install bandit
+bandit -r src/deep_dive -c pyproject.toml
+```
+
+The `pyproject.toml` `[tool.bandit]` section intentionally suppresses
+**B110** (try/except/pass), **B112** (try/except/continue), **B311**
+(`random` for fingerprinting), **B404** (subprocess for mmx CLI),
+**B603** (subprocess without shell). Each suppression carries a
+justification comment in `pyproject.toml`. If your use case differs
+from these, override the `skips` list locally or pass `--skips` on the
+command line.
+
+## 🔐 Cryptographic Hashes
+
+`deep-dive` uses `hashlib.sha1` and `hashlib.md5` for **non-cryptographic
+content addressing** (paragraph deduplication, Windows MAX_PATH slug
+fallback). Both call sites explicitly pass `usedforsecurity=False`
+(Python 3.9+) to make intent explicit and silence Bandit B324. Neither
+hash is used for authentication, signing, token generation, or any
+security-sensitive operation.

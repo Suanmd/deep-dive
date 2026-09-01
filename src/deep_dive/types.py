@@ -13,10 +13,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class TaskStatus(str, enum.Enum):
     """Outcome of a single matrix task (one query → one set of URLs)."""
@@ -77,6 +77,7 @@ class QueryKind(str, enum.Enum):
 # Search results (engine output)
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True, slots=True)
 class SearchHit:
     """A single URL returned by a search engine."""
@@ -84,13 +85,14 @@ class SearchHit:
     url: str
     title: str = ""
     snippet: str = ""
-    engine: str = ""           # "mmx" / "tavily"
+    engine: str = ""  # "mmx" / "tavily"
     score: float | None = None
 
 
 # ---------------------------------------------------------------------------
 # Per-task and per-URL outcomes
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class FetchResult:
@@ -117,19 +119,19 @@ class MatrixRow:
     execute in its own thread.
     """
 
-    note: str                       # human-readable label, e.g. "中文原始"
-    query: str                      # the actual query string to send to the engine
-    topk: int                       # desired number of URLs from the engine
-    exclude: tuple[str, ...]        # blacklist domains (-site: ... appended to query)
-    engine: str = "auto"            # engine hint: "auto" | "mmx" | "tavily"
+    note: str  # human-readable label, e.g. "中文原始"
+    query: str  # the actual query string to send to the engine
+    topk: int  # desired number of URLs from the engine
+    exclude: tuple[str, ...]  # blacklist domains (-site: ... appended to query)
+    engine: str = "auto"  # engine hint: "auto" | "mmx" | "tavily"
 
 
 @dataclass(frozen=True, slots=True)
 class TaskResult:
     """Aggregate result for one matrix task (one query → many URLs)."""
 
-    note: str                              # human-readable label, e.g. "中文原始"
-    query: str                             # the actual query that was searched
+    note: str  # human-readable label, e.g. "中文原始"
+    query: str  # the actual query that was searched
     status: TaskStatus
     output_dir: Path | None = None
     url_count: int = 0
@@ -149,9 +151,9 @@ class CrawlResult:
     topic: str
     run_id: str
     task_results: tuple[TaskResult, ...]
-    aggregated: "AggregatedResult"
+    aggregated: AggregatedResult
     report_path: Path | None = None
-    global_status: str = "success"     # success / quota_exceeded / no_results / mixed
+    global_status: str = "success"  # success / quota_exceeded / no_results / mixed
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,9 +162,9 @@ class AggregatedResult:
 
     total_urls: int
     unique_urls: tuple[str, ...]
-    url_meta: dict[str, FetchResult]              # canonical_url → metadata
-    all_meta: tuple[FetchResult, ...]             # all (incl. duplicates) for debug
-    url_sources: dict[str, tuple[str, ...]]       # canonical_url → tuple of task notes
+    url_meta: dict[str, FetchResult]  # canonical_url → metadata
+    all_meta: tuple[FetchResult, ...]  # all (incl. duplicates) for debug
+    url_sources: dict[str, tuple[str, ...]]  # canonical_url → tuple of task notes
     url_query_indices: dict[str, tuple[int, ...]]
     global_status: str = "success"
 
@@ -236,7 +238,7 @@ class ResearchPlan:
     rationale: str = ""
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ResearchPlan":
+    def from_dict(cls, d: dict[str, Any]) -> ResearchPlan:
         """Build from a dict (e.g. parsed JSON).
 
         Tolerates extra keys (forward-compat with future plan fields).
@@ -257,15 +259,14 @@ class ResearchPlan:
         )
 
     @classmethod
-    def from_json_file(cls, path: Path) -> "ResearchPlan":
+    def from_json_file(cls, path: Path) -> ResearchPlan:
         """Load from a JSON file."""
         import json as _json
-        with open(path, "r", encoding="utf-8") as f:
+
+        with open(path, encoding="utf-8") as f:
             d = _json.load(f)
         if not isinstance(d, dict):
-            raise ValueError(
-                f"ResearchPlan JSON must be an object, got {type(d).__name__}"
-            )
+            raise ValueError(f"ResearchPlan JSON must be an object, got {type(d).__name__}")
         return cls.from_dict(d)
 
     def to_dict(self) -> dict[str, Any]:
@@ -285,6 +286,7 @@ class ResearchPlan:
     def to_json_file(self, path: Path) -> None:
         """Write to a JSON file (UTF-8, indented, ``ensure_ascii=False``)."""
         import json as _json
+
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
 
@@ -296,34 +298,62 @@ class ResearchPlan:
 # have non-tech meanings and are intentionally excluded). Match is
 # case-insensitive on the compact query (whitespace + dashes stripped)
 # so "mHC", "MHC", and "mhc" all trigger.
-_TECH_ACRONYMS: frozenset[str] = frozenset({
-    # AI model architectures (no false positive risk)
-    "mhc", "moe", "mha", "ssm", "mamba", "transformer", "vit",
-    # LLM / multimodal model families (acronyms only — full names like
-    # "claude" / "gemini" / "llama" have non-tech meanings and are
-    # intentionally NOT here)
-    "llm", "gpt", "bert", "t5", "vlm", "mlm",
-    # Training paradigms
-    "rlhf", "dpo", "ppo", "sft", "lora", "qlora",
-    # Inference / serving patterns
-    "rag", "mcp", "kvcache", "vllm", "gguf",
-    # Compound brand names (specific enough to be unambiguous)
-    "chatgpt", "deepseek", "qwen", "huggingface", "langchain",
-})
+_TECH_ACRONYMS: frozenset[str] = frozenset(
+    {
+        # AI model architectures (no false positive risk)
+        "mhc",
+        "moe",
+        "mha",
+        "ssm",
+        "mamba",
+        "transformer",
+        "vit",
+        # LLM / multimodal model families (acronyms only — full names like
+        # "claude" / "gemini" / "llama" have non-tech meanings and are
+        # intentionally NOT here)
+        "llm",
+        "gpt",
+        "bert",
+        "t5",
+        "vlm",
+        "mlm",
+        # Training paradigms
+        "rlhf",
+        "dpo",
+        "ppo",
+        "sft",
+        "lora",
+        "qlora",
+        # Inference / serving patterns
+        "rag",
+        "mcp",
+        "kvcache",
+        "vllm",
+        "gguf",
+        # Compound brand names (specific enough to be unambiguous)
+        "chatgpt",
+        "deepseek",
+        "qwen",
+        "huggingface",
+        "langchain",
+    }
+)
 
 # Major AI lab company names whose presence is an unambiguous tech
 # signal in contemporary discourse. Matched **lowercased** so
 # ``Anthropic`` / ``anthropic`` both hit. Excludes names with strong
 # non-tech meanings (claude/gemini/llama are also personal names /
 # zodiac / animal, mistral is also a Mediterranean wind).
-_AI_LAB_BRANDS: frozenset[str] = frozenset({
-    "anthropic",   # Claude
-    "openai",      # ChatGPT, GPT
-    "xai",         # Grok
-    "mistral",     # Mistral / Mixtral
-    "cohere",      # Command
-    "perplexity",  # Perplexity AI
-})
+_AI_LAB_BRANDS: frozenset[str] = frozenset(
+    {
+        "anthropic",  # Claude
+        "openai",  # ChatGPT, GPT
+        "xai",  # Grok
+        "mistral",  # Mistral / Mixtral
+        "cohere",  # Command
+        "perplexity",  # Perplexity AI
+    }
+)
 
 # Keyword sets for kind auto-detection from query. Kept in the types
 # module (not config) because they are part of the SKILL contract, not
@@ -334,13 +364,41 @@ KIND_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
         # queries like "deepseek mHC 架构" or "Llama 论文" classify as
         # tech even when no English keyword matches.
         "zh": (
-            "技术", "编程", "代码", "算法", "深度学习", "机器学习",
-            "大模型", "神经网络", "transformer", "gpt", "llm",
-            "pytorch", "tensorflow", "github", "api", "sql",
-            "kubernetes", "docker", "python", "java", "rust",
-            "javascript", "go语言",
-            "架构", "论文", "预印本", "微调", "对齐", "蒸馏",
-            "量化", "剪枝", "评测", "基准", "实现", "推理",
+            "技术",
+            "编程",
+            "代码",
+            "算法",
+            "深度学习",
+            "机器学习",
+            "大模型",
+            "神经网络",
+            "transformer",
+            "gpt",
+            "llm",
+            "pytorch",
+            "tensorflow",
+            "github",
+            "api",
+            "sql",
+            "kubernetes",
+            "docker",
+            "python",
+            "java",
+            "rust",
+            "javascript",
+            "go语言",
+            "架构",
+            "论文",
+            "预印本",
+            "微调",
+            "对齐",
+            "蒸馏",
+            "量化",
+            "剪枝",
+            "评测",
+            "基准",
+            "实现",
+            "推理",
             "智能体",
         ),
         # English tech signals. "architecture"/"paper"/"benchmark"/"arxiv"
@@ -352,38 +410,246 @@ KIND_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
         # above is kept because Chinese usage is much more specific to
         # AI/LLM agents.
         "en": (
-            "tech", "code", "coding", "algorithm", "machine learning",
-            "deep learning", "neural", "transformer", "pytorch",
-            "tensorflow", "github", "api", "programming", "kubernetes",
-            "docker", "python", "java", "rust", "javascript",
-            "asyncio", "linux", "quantum", "robotics",
-            "architecture", "paper", "arxiv", "preprint", "fine-tune",
-            "finetune", "alignment", "quantization", "distillation",
-            "benchmark", "evaluation", "inference",
+            "tech",
+            "code",
+            "coding",
+            "algorithm",
+            "machine learning",
+            "deep learning",
+            "neural",
+            "transformer",
+            "pytorch",
+            "tensorflow",
+            "github",
+            "api",
+            "programming",
+            "kubernetes",
+            "docker",
+            "python",
+            "java",
+            "rust",
+            "javascript",
+            "asyncio",
+            "linux",
+            "quantum",
+            "robotics",
+            "architecture",
+            "paper",
+            "arxiv",
+            "preprint",
+            "fine-tune",
+            "finetune",
+            "alignment",
+            "quantization",
+            "distillation",
+            "benchmark",
+            "evaluation",
+            "inference",
+            "training",
+            "on-policy",
+            "policy",
+            "agentic",
+            "reasoning",
+            "reward",
         ),
     },
     "business": {
-        "zh": ("公司", "投资", "股价", "估值", "市场", "财报", "ipo", "股票", "基金", "营收", "市值", "融资", "创业", "vc", "pe", "a股", "港股"),
-        "en": ("company", "stock", "market", "investment", "ipo", "valuation", "revenue", "fund", "vc", "startup", "equity", "earnings", "finance", "investor"),
+        "zh": (
+            "公司",
+            "投资",
+            "股价",
+            "估值",
+            "市场",
+            "财报",
+            "ipo",
+            "股票",
+            "基金",
+            "营收",
+            "市值",
+            "融资",
+            "创业",
+            "vc",
+            "pe",
+            "a股",
+            "港股",
+        ),
+        "en": (
+            "company",
+            "stock",
+            "market",
+            "investment",
+            "ipo",
+            "valuation",
+            "revenue",
+            "fund",
+            "vc",
+            "startup",
+            "equity",
+            "earnings",
+            "finance",
+            "investor",
+        ),
     },
     "news": {
-        "zh": ("新闻", "今日", "最新", "突发", "今天", "昨日", "本周", "本月", "事件", "发生", "传言", "爆料", "回应"),
-        "en": ("news", "today", "yesterday", "breaking", "latest", "this week", "this month", "happened", "occurred", "scandal", "rumor", "responds"),
+        "zh": (
+            "新闻",
+            "今日",
+            "最新",
+            "突发",
+            "今天",
+            "昨日",
+            "本周",
+            "本月",
+            "事件",
+            "发生",
+            "传言",
+            "爆料",
+            "回应",
+        ),
+        "en": (
+            "news",
+            "today",
+            "yesterday",
+            "breaking",
+            "latest",
+            "this week",
+            "this month",
+            "happened",
+            "occurred",
+            "scandal",
+            "rumor",
+            "responds",
+        ),
     },
     "movies": {
         # Pop-culture / movies / TV / anime — the angle that wants
         # review/interpretation, themes/metaphor, box-office reception,
         # series/sequel framing — NOT academic survey/critique.
-        "zh": ("电影", "动画片", "番剧", "动漫", "电视剧", "综艺", "剧场版", "ova", "动画", "剧集", "续集", "系列电影", "影评", "票房"),
-        "en": ("movie", "movies", "film", "films", "anime", "tv series", "tv show", "series", "episode", "season", "sequel", "prequel", "cinema", "box office", "review", "soundtrack", "director", "screenplay"),
+        "zh": (
+            "电影",
+            "动画片",
+            "番剧",
+            "动漫",
+            "电视剧",
+            "综艺",
+            "剧场版",
+            "ova",
+            "动画",
+            "剧集",
+            "续集",
+            "系列电影",
+            "影评",
+            "票房",
+        ),
+        "en": (
+            "movie",
+            "movies",
+            "film",
+            "films",
+            "anime",
+            "tv series",
+            "tv show",
+            "series",
+            "episode",
+            "season",
+            "sequel",
+            "prequel",
+            "cinema",
+            "box office",
+            "review",
+            "soundtrack",
+            "director",
+            "screenplay",
+        ),
     },
     "academic": {
-        "zh": ("论文", "学术", "研究", "期刊", "学报", "会议", "引用", "综述", "方法论", "实验", "数据集", "基线", "预印本"),
-        "en": ("paper", "research", "study", "journal", "conference", "citation", "review", "methodology", "arxiv", "baseline", "dataset", "experiment", "preprint"),
+        "zh": (
+            "论文",
+            "学术",
+            "研究",
+            "期刊",
+            "学报",
+            "会议",
+            "引用",
+            "综述",
+            "方法论",
+            "实验",
+            "数据集",
+            "基线",
+            "预印本",
+        ),
+        "en": (
+            "paper",
+            "research",
+            "study",
+            "journal",
+            "conference",
+            "citation",
+            "review",
+            "methodology",
+            "arxiv",
+            "baseline",
+            "dataset",
+            "experiment",
+            "preprint",
+        ),
     },
     "humanities": {
-        "zh": ("历史", "文化", "哲学", "艺术", "书评", "小说", "文学", "心理", "精神", "访谈", "社会学", "人类学", "诗", "电影", "音乐", "思想", "传记", "回忆录", "天才", "疯子", "天才在左", "疯子在右", "抑郁症", "心理访谈", "人生", "灵魂", "真实"),
-        "en": ("history", "culture", "philosophy", "art", "literature", "psychology", "psychiatry", "interview", "sociology", "anthropology", "poetry", "film", "music", "thought", "biography", "memoir", "genius", "madness", "lunatic", "depression", "soul", "reality", "life", "autobiography"),
+        "zh": (
+            "历史",
+            "文化",
+            "哲学",
+            "艺术",
+            "书评",
+            "小说",
+            "文学",
+            "心理",
+            "精神",
+            "访谈",
+            "社会学",
+            "人类学",
+            "诗",
+            "电影",
+            "音乐",
+            "思想",
+            "传记",
+            "回忆录",
+            "天才",
+            "疯子",
+            "天才在左",
+            "疯子在右",
+            "抑郁症",
+            "心理访谈",
+            "人生",
+            "灵魂",
+            "真实",
+        ),
+        "en": (
+            "history",
+            "culture",
+            "philosophy",
+            "art",
+            "literature",
+            "psychology",
+            "psychiatry",
+            "interview",
+            "sociology",
+            "anthropology",
+            "poetry",
+            "film",
+            "music",
+            "thought",
+            "biography",
+            "memoir",
+            "genius",
+            "madness",
+            "lunatic",
+            "depression",
+            "soul",
+            "reality",
+            "life",
+            "autobiography",
+        ),
     },
 }
 

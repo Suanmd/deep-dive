@@ -16,9 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 
-import pytest
-
-from deep_dive.config import Config, load_config
+from deep_dive.config import Config
 from deep_dive.orchestrator import build_search_matrix_from_plan
 from deep_dive.types import ResearchPlan
 
@@ -36,11 +34,13 @@ def _plan(
         kind=kind,
         depth="normal",
         language_priority=language_priority,
-        english_search_terms=english_search_terms or [
+        english_search_terms=english_search_terms
+        or [
             "LLM leaderboard 2026 Chatbot Arena LMSYS",
             "Open LLM Leaderboard Hugging Face 2026",
         ],
-        variants=variants or {
+        variants=variants
+        or {
             "refined": "大模型 天梯榜 2026 LLM 排名 评测 基准",
             "critique": "大模型 天梯榜 2026 局限性 不可靠 排名",
             "academic": "LLM 大模型 评测 基准 benchmark",
@@ -76,9 +76,7 @@ class TestSiteTargetedEnglishBaseline:
                 f"site-targeted query still contains Chinese: {row.query!r} "
                 f"(site:lmsys.org with a Chinese query returns 0 hits)"
             )
-            assert "LLM" in row.query, (
-                f"site-targeted query missing English baseline: {row.query!r}"
-            )
+            assert "LLM" in row.query, f"site-targeted query missing English baseline: {row.query!r}"
 
     def test_zh_only_plan_falls_back_to_chinese_query(self):
         plan = _plan(
@@ -94,8 +92,7 @@ class TestSiteTargetedEnglishBaseline:
         site_rows = [r for r in rows if r.note.startswith("站点定向:")]
         for row in site_rows:
             assert "大模型" in row.query, (
-                f"zh-only plan should use Chinese query for site-targeted: "
-                f"{row.query!r}"
+                f"zh-only plan should use Chinese query for site-targeted: {row.query!r}"
             )
 
     def test_en_only_plan_uses_english_query(self):
@@ -160,8 +157,7 @@ class TestSiteTargetedCrossCapSurvives:
         rows, dropped = build_search_matrix_from_plan(plan, config=cfg)
         site_rows = [r for r in rows if r.note.startswith("站点定向:")]
         assert len(site_rows) == 2, (
-            f"expected 2 site-targeted rows after cap, got {len(site_rows)}. "
-            f"Dropped: {dropped}"
+            f"expected 2 site-targeted rows after cap, got {len(site_rows)}. Dropped: {dropped}"
         )
         # And they must still use English query, not Chinese.
         for row in site_rows:
@@ -199,13 +195,9 @@ class TestSiteTargetedPerSiteSelection:
         hf_row = next(r for r in rows if r.note.startswith("站点定向:huggingface.co"))
 
         # lmsys → terms[0] (contains LMSYS)
-        assert lmsys_row.query.startswith(
-            "LLM leaderboard 2026 Chatbot Arena LMSYS site:lmsys.org"
-        )
+        assert lmsys_row.query.startswith("LLM leaderboard 2026 Chatbot Arena LMSYS site:lmsys.org")
         # huggingface → terms[1] (contains hugging/face), NOT the baseline
-        assert hf_row.query.startswith(
-            "Open LLM Leaderboard Hugging Face 2026 site:huggingface.co"
-        )
+        assert hf_row.query.startswith("Open LLM Leaderboard Hugging Face 2026 site:huggingface.co")
         # Critical: huggingface must NOT use the lmsys baseline anymore
         assert "LMSYS" not in hf_row.query
         assert "Chatbot Arena" not in hf_row.query
@@ -230,10 +222,13 @@ class TestSiteTargetedPerSiteSelection:
             ],
         )
         plan = ResearchPlan(
-            query=plan.query, kind=plan.kind, depth="full",
+            query=plan.query,
+            kind=plan.kind,
+            depth="full",
             language_priority=plan.language_priority,
             english_search_terms=plan.english_search_terms,
-            variants=plan.variants, target_sites=plan.target_sites,
+            variants=plan.variants,
+            target_sites=plan.target_sites,
             relevance_threshold=plan.relevance_threshold,
             rationale=plan.rationale,
         )
@@ -247,9 +242,7 @@ class TestSiteTargetedPerSiteSelection:
 
         # All three should route to a different english term.
         prefixes = {q.split(" site:")[0] for q in site_queries.values()}
-        assert len(prefixes) == 3, (
-            f"expected 3 distinct english prefixes, got {prefixes}"
-        )
+        assert len(prefixes) == 3, f"expected 3 distinct english prefixes, got {prefixes}"
 
     def test_site_with_no_match_falls_back_to_baseline(self):
         """A site whose tokens don't appear in any English term falls

@@ -6,15 +6,12 @@ Validates end-to-end flow without network access.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-import pytest
-
+from deep_dive.config import Config
 from deep_dive.crawler.engines.base import SearchEngine, SearchHit
 from deep_dive.crawler.fetchers.base import Fetcher
-from deep_dive.config import Config
 from deep_dive.orchestrator import Orchestrator
-from deep_dive.types import FetchStatus, TaskStatus
+from deep_dive.types import TaskStatus
 
 
 class MockEngine(SearchEngine):
@@ -32,14 +29,15 @@ class MockEngine(SearchEngine):
     def _raw_search(self, query, topk):
         if self.fail:
             from deep_dive.crawler.engines.base import SearchEngineError
+
             raise SearchEngineError("mock failure")
         if self.quota:
             from deep_dive.crawler.engines.base import SearchEngineQuotaError
+
             raise SearchEngineQuotaError("mock quota")
         if self.empty:
             return []
-        return [SearchHit(url=u, title=f"Mock {i}", engine=self.name)
-                for i, u in enumerate(self.urls[:topk])]
+        return [SearchHit(url=u, title=f"Mock {i}", engine=self.name) for i, u in enumerate(self.urls[:topk])]
 
 
 class MockFetcher(Fetcher):
@@ -63,12 +61,15 @@ class MockFetcher(Fetcher):
 # Matrix tests (pure-function)
 # ---------------------------------------------------------------------------
 
+
 class TestOrchestratorE2E:
     def test_full_run_produces_outputs(self, tmp_output_dir):
-        engine = MockEngine([
-            "https://example.com/a",
-            "https://example.com/b",
-        ])
+        engine = MockEngine(
+            [
+                "https://example.com/a",
+                "https://example.com/b",
+            ]
+        )
 
         cfg = Config()
         cfg.depth = "quick"
@@ -146,6 +147,6 @@ class TestOrchestratorE2E:
         assert len(subdirs) == 1
         summary = subdirs[0] / "summary.json"
         assert summary.exists()
-        data = json.loads(summary.read_text(encoding="utf-8"))
+        data = json.loads(summary.read_text(encoding="utf-8-sig"))
         assert data["query"] == "test"
         assert "task_results" in data

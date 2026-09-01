@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import io
-import sys
 
-import pytest
-
-from deep_dive.constants import TAG_DONE, TAG_ERR, TAG_FIRE, TAG_OK, TAG_WARN
+from deep_dive.constants import TAG_ERR, TAG_FIRE, TAG_OK, TAG_WARN
 from deep_dive.logging_setup import Logger, safe_print
 
 

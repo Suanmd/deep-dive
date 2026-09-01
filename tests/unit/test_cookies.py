@@ -38,7 +38,7 @@ def comment_and_valid_mixed(tmp_path):
             ],
         },
         "_meta": {
-            "last_updated": "2026-08-29",
+            "last_updated": "2026-08-31",
             "owner": "throwaway account",
         },
         "baidu_wenku": {
@@ -99,6 +99,7 @@ class TestLoadCookiesBasics:
 
     def test_missing_file_returns_empty_dict(self, tmp_path, monkeypatch):
         from deep_dive.config import Config
+
         monkeypatch.setattr(Config, "cookie_file", tmp_path / "nonexistent.json")
         assert load_cookies() == {}
 
@@ -147,9 +148,7 @@ class TestMatchCookiesToUrl:
         cookies_map = {
             "zhihu": [Cookie(name="z_c0", value="abc", domain=".zhihu.com", path="/")],
         }
-        matched = match_cookies_to_url(
-            "https://www.zhihu.com/question/123", cookies_map
-        )
+        matched = match_cookies_to_url("https://www.zhihu.com/question/123", cookies_map)
         assert any(c["name"] == "z_c0" for c in matched)
 
     def test_zhihu_cookie_does_not_match_baidu(self):

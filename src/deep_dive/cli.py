@@ -73,10 +73,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run-id", default=None, help="Custom run id (ASCII slug enforced)")
     p.add_argument("--max-workers", type=int, default=None, help="Parallel task concurrency")
     p.add_argument(
-        "--topk", type=int, default=None,
+        "--topk",
+        type=int,
+        default=None,
         help="Override per-task URL cap (default: from depth preset). "
-             "Useful when search engines return fewer than the preset "
-             "default — --topk=24 gives more room than normal's 18.",
+        "Useful when search engines return fewer than the preset "
+        "default — --topk=24 gives more room than normal's 18.",
     )
     p.add_argument("--min-chars", type=int, default=None, help="Low-quality page char threshold")
     p.add_argument("--no-report", action="store_true", help="Skip Markdown report generation")
@@ -209,15 +211,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2  # user supplied an invalid CLI flag
 
     if args.print_config:
-        safe_print(
-            json.dumps(cfg.to_dict(redact_secrets=True), indent=2, ensure_ascii=False)
-        )
+        safe_print(json.dumps(cfg.to_dict(redact_secrets=True), indent=2, ensure_ascii=False))
         return 0
 
     plan = _load_plan(args.plan)
     if plan is None and args.plan is None:
         from .orchestrator import auto_plan
-        plan = auto_plan(args.query)
+
+        plan = auto_plan(args.query, config=cfg)
         safe_print(
             "[INFO] No --plan supplied; auto-generated a minimal plan. "
             "Pass --plan for richer variants / target_sites (see examples/)."
@@ -227,6 +228,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.dry_run:
+        from .orchestrator import build_search_matrix_from_plan
+
         safe_print("")
         safe_print("=" * 70)
         safe_print(f"  DRY RUN | query='{args.query}' depth={cfg.depth}")
@@ -235,6 +238,21 @@ def main(argv: list[str] | None = None) -> int:
         safe_print(f"       variants={len(plan.variants)} sites={len(plan.target_sites)}")
         if plan.rationale:
             safe_print(f"       rationale: {plan.rationale}")
+        safe_print("")
+        # Build + print the actual matrix the dispatcher would consume.
+        matrix, dropped = build_search_matrix_from_plan(plan, config=cfg)
+        topk = cfg.topk_for()
+        max_q = cfg.max_queries_for()
+        safe_print(f"[MATRIX] {len(matrix)} task(s) (cap max_queries={max_q}, topk={topk})")
+        for i, row in enumerate(matrix, 1):
+            engine = f" [{row.engine}]" if row.engine else ""
+            safe_print(f"   {i:>2}. topk={row.topk:<3}{engine} q={row.query}")
+            safe_print(f"        note: {row.note}")
+        if dropped:
+            safe_print("")
+            safe_print(f"[DROPPED] {len(dropped)} task(s) didn't fit in the cap:")
+            for d in dropped:
+                safe_print(f"   - {d}")
         safe_print("")
         safe_print("(network dispatch skipped — dry run)")
         return 0
@@ -247,7 +265,9 @@ def main(argv: list[str] | None = None) -> int:
     #     finalizers that historically caused exit code 1 even on
     #     successful runs.
     import os as _os
+
     from .orchestrator import Orchestrator
+
     try:
         orch = Orchestrator(cfg)
         orch.run(query=args.query, plan=plan)
@@ -260,9 +280,11 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         safe_print(
             f"\n[FATAL] {type(e).__name__}: {e}",
-            file=sys.stderr, flush=True,
+            file=sys.stderr,
+            flush=True,
         )
         import traceback
+
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()
         _os._exit(1)
@@ -274,7 +296,22 @@ def main(argv: list[str] | None = None) -> int:
     # skips atexit handlers + GC finalizers, which is fine here — the
     # orchestrator has already done its own cleanup and written all
     # outputs.
-    _os._exit(0)
+    #
+    # Defensive belt-and-braces: also ``sys.exit(0)`` after a brief
+    # flush. If a stray thread already terminated the process with
+    # code 1 (e.g. via ``_thread.exit``), this never runs — but if
+    # ``_os._exit(0)`` somehow didn't take, ``sys.exit(0)`` guarantees
+    # a clean exit code via the standard SystemExit handler.
+    safe_print("[EXIT-OK] report + summary written; exiting 0", flush=True)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        _os._exit(0)
+    except Exception:
+        try:
+            sys.exit(0)
+        except Exception:
+            _os._exit(0)
 
 
 if __name__ == "__main__":

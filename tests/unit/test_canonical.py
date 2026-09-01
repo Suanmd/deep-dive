@@ -2,7 +2,7 @@
 
 Validates byte-for-byte parity with the legacy
 ``_canonicalize_url`` helper used in the previous
-``deep-search`` crawler implementation.
+``deep-dive`` crawler implementation.
 """
 
 from __future__ import annotations
@@ -67,9 +67,7 @@ class TestCanonicalizeUrl:
         assert canonicalize_url("https://example.com/") == "https://example.com/"
 
     def test_strips_tracking_params(self):
-        result = canonicalize_url(
-            "https://example.com/path?utm_source=x&keep=1"
-        )
+        result = canonicalize_url("https://example.com/path?utm_source=x&keep=1")
         assert "utm_source" not in result
         assert "keep=1" in result
 
@@ -81,7 +79,7 @@ class TestCanonicalizeUrl:
         assert canonicalize_url("https://example.com/p#section") == "https://example.com/p"
 
     def test_preserves_path_case(self):
-        # Path case is preserved (legacy behavior — only host is lowercased)
+        # Path case is preserved (only host is lowercased)
         assert canonicalize_url("https://Example.COM/CamelCase") == "https://example.com/CamelCase"
 
     def test_invalid_url_returned_as_is(self):
@@ -94,12 +92,9 @@ class TestCanonicalizeUrl:
     @pytest.mark.parametrize(
         "url_in,url_out",
         [
-            ("HTTPS://Example.COM/a/?utm_source=x&id=1#frag",
-             "https://example.com/a?id=1"),
-            ("https://example.com/p?gclid=ABC&id=5",
-             "https://example.com/p?id=5"),
-            ("https://api.example.com/v1?b=2&a=1",
-             "https://api.example.com/v1?a=1&b=2"),
+            ("HTTPS://Example.COM/a/?utm_source=x&id=1#frag", "https://example.com/a?id=1"),
+            ("https://example.com/p?gclid=ABC&id=5", "https://example.com/p?id=5"),
+            ("https://api.example.com/v1?b=2&a=1", "https://api.example.com/v1?a=1&b=2"),
         ],
     )
     def test_combo(self, url_in, url_out):

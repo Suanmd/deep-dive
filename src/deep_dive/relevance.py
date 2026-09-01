@@ -26,7 +26,6 @@ The threshold values are configurable via :class:`deep_dive.config.Config`
 so users with different corpus characteristics can tune them.
 """
 
-
 from __future__ import annotations
 
 import re
@@ -36,7 +35,6 @@ from deep_dive.constants import (
     QUERY_RELEVANCE_MIN_HITRATE,
 )
 from deep_dive.types import RelevanceVerdict
-
 
 # Pre-compiled regexes (avoid recompiling on every call)
 _CN_CHAR = re.compile(r"[\u4e00-\u9fff]")
@@ -68,8 +66,8 @@ def _query_keywords(query: str) -> set[str]:
     for c in query:
         if "\u4e00" <= c <= "\u9fff":
             out.add(c)
-    for w in _EN_WORD.findall(query):
-        out.add(w.lower())
+    for w in _EN_WORD.finditer(query):
+        out.add(w.group(0).lower())
     return out
 
 
@@ -143,8 +141,8 @@ def _extract_core_entities(query: str) -> list[str]:
             if len(right) >= 2 and right not in seen:
                 seen.add(right)
                 out.append(right)
-    for m in _EN_ENTITY.findall(query):
-        ml = m.lower()
+    for m in _EN_ENTITY.finditer(query):
+        ml = m.group(0).lower()
         if ml not in seen:
             seen.add(ml)
             out.append(ml)
@@ -294,9 +292,8 @@ def is_query_irrelevant(
 
     # Stage 2: core-entity coverage
     hits, total = core_entity_hitrate(text, query)
-    if total > 0:
-        if (hits / total) < core_entity_min_hitrate:
-            return True
+    if total > 0 and (hits / total) < core_entity_min_hitrate:
+        return True
 
     # Stage: primary entity in lead (topic-drift guard).
     # Rejects tangentially-related articles that *mention* the query

@@ -6,17 +6,15 @@ Covers the bug fix for ``resp.text`` falling back to ISO-8859-1
 
 from __future__ import annotations
 
-import pytest
-
 from deep_dive.crawler.encoding import (
     is_likely_double_mojibake,
     smart_decode_bytes,
 )
 
-
 # ---------------------------------------------------------------------------
 # smart_decode_bytes
 # ---------------------------------------------------------------------------
+
 
 class TestSmartDecodeBytes:
     def test_empty_bytes_returns_empty(self):
@@ -24,7 +22,7 @@ class TestSmartDecodeBytes:
 
     def test_utf8_bytes_decode_correctly(self):
         # "数" in UTF-8 is e6 95 b0
-        assert smart_decode_bytes("数".encode("utf-8")) == "数"
+        assert smart_decode_bytes("数".encode()) == "数"
 
     def test_gbk_bytes_decode_correctly(self):
         # "数" in GBK is ca fd
@@ -40,24 +38,20 @@ class TestSmartDecodeBytes:
 
     def test_hint_falls_through_on_failure(self):
         # Bytes are UTF-8 but hint says GBK → strict decode fails, must fall through
-        data = "数学".encode("utf-8")
+        data = "数学".encode()
         result = smart_decode_bytes(data, hint="gbk")
         # Should fall through and recover via charset_normalizer / meta / UTF-8
         assert "数" in result and "学" in result
 
     def test_meta_charset_extraction(self):
-        html = (
-            b"<html><head>"
-            b"<meta charset=\"utf-8\">"
-            b"</head><body>\xe6\x95\xb0\xe5\xad\xa6</body></html>"
-        )
+        html = b'<html><head><meta charset="utf-8"></head><body>\xe6\x95\xb0\xe5\xad\xa6</body></html>'
         result = smart_decode_bytes(html)
         assert "数学" in result
 
     def test_meta_charset_with_attributes(self):
         # HTML4 form: <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         html = (
-            b'<html><head>'
+            b"<html><head>"
             b'<meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
             b"</head><body>\xe6\x95\xb0</body></html>"
         )
@@ -66,7 +60,7 @@ class TestSmartDecodeBytes:
 
     def test_no_charset_signal_falls_back_to_utf8(self):
         # No hint, no detectable charset, no meta — just bytes.
-        data = "费马大定理".encode("utf-8")
+        data = "费马大定理".encode()
         assert smart_decode_bytes(data) == "费马大定理"
 
     def test_invalid_bytes_dont_crash(self):
@@ -80,9 +74,7 @@ class TestSmartDecodeBytes:
         # Confirm we don't try to scan the entire body for meta charset.
         # 1MB of body content after a small head with charset.
         head = (
-            b"<html><head><meta charset=\"utf-8\"></head><body>"
-            + b"<p>" * 100000
-            + b"\xe6\x95\xb0\xe5\xad\xa6"
+            b'<html><head><meta charset="utf-8"></head><body>' + b"<p>" * 100000 + b"\xe6\x95\xb0\xe5\xad\xa6"
         )
         result = smart_decode_bytes(head)
         assert "数学" in result
@@ -98,6 +90,7 @@ class TestSmartDecodeBytes:
 # ---------------------------------------------------------------------------
 # is_likely_double_mojibake
 # ---------------------------------------------------------------------------
+
 
 class TestIsLikelyDoubleMojibake:
     def test_clean_chinese_returns_false(self):

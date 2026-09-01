@@ -55,7 +55,7 @@ Chrome Web Store: [EditThisCookie](https://chrome.google.com/webstore/detail/edi
    ```
 2. 把 `cookies.json` 里 `zhihu.cookies[]` 数组的 3 个 `value` 字段替换成真实值
 3. 删掉 `_hint` 字段（仅自己看）
-4. 填上 `"last_updated": "2026-08-29"`
+4. 填上 `"last_updated": "2026-08-31"`
 
 最终结构长这样：
 ```json
@@ -68,7 +68,7 @@ Chrome Web Store: [EditThisCookie](https://chrome.google.com/webstore/detail/edi
       {"name": "d_c0",      "value": "AAE...",           "domain": ".zhihu.com", "path": "/"}
     ],
     "note": "throwaway account",
-    "last_updated": "2026-08-29"
+    "last_updated": "2026-08-31"
   },
   "baidu_wenku": { "...": "..." },
   "weixin":       { "...": "..." }

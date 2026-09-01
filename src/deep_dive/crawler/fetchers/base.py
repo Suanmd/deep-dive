@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -78,6 +77,7 @@ class Fetcher(abc.ABC):
     ) -> tuple[str, str]:
         """Async default: run sync fetch in executor."""
         import asyncio
+
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,

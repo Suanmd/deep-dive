@@ -5,7 +5,7 @@ country or region (e.g. ``Japan``, ``南美``, ``法国大革命``), we want
 to add a search task in the local language. This module returns the
 list of additional language targets to append to the search matrix.
 
-The legacy project kept this list hardcoded in ``deep_search.py``. We
+This list is module-level (not loaded from config) for two reasons
 extracted it for two reasons:
 
 1. **Testability** — the detection logic is a pure function on a string.
@@ -18,7 +18,6 @@ region keywords. Adding more would risk false positives.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Final
 
@@ -27,14 +26,18 @@ from typing import Final
 class LocalLang:
     """One local-language expansion target."""
 
-    code: str           # ISO 639-1 (best effort)
-    name: str           # human-readable Chinese label
+    code: str  # ISO 639-1 (best effort)
+    name: str  # human-readable Chinese label
 
 
 #: Default ruleset. Override by passing ``rules=`` to :func:`detect_local_langs`.
 DEFAULT_RULES: Final[tuple[tuple[tuple[str, ...], str, str], ...]] = (
     (("日本", "东京", "京都", "大阪", "japan", "tokyo", "kyoto"), "ja", "日文"),
-    (("南美", "拉美", "阿根廷", "巴西", "智利", "秘鲁", "south america", "brazil", "argentina"), "es", "西文"),
+    (
+        ("南美", "拉美", "阿根廷", "巴西", "智利", "秘鲁", "south america", "brazil", "argentina"),
+        "es",
+        "西文",
+    ),
     (("巴西", "brazil", "lisbon"), "pt", "葡文"),
     (("韩国", "首尔", "korea", "seoul", "kpop", "k-"), "ko", "韩文"),
     (("法国", "巴黎", "france", "paris", "法语", "french"), "fr", "法文"),

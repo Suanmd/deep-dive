@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from deep_dive.local_langs import (
     DEFAULT_RULES,
-    LocalLang,
     detect_local_langs,
     local_lang_for,
 )

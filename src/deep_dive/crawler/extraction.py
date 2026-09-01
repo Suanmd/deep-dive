@@ -30,6 +30,7 @@ from deep_dive.constants import BLOCK_KEYWORDS
 
 try:
     import trafilatura
+
     _HAS_TRAFILATURA = True
 except ImportError:  # pragma: no cover — trafilatura is a hard dep
     _HAS_TRAFILATURA = False
@@ -42,9 +43,7 @@ _DEFAULT_OPTS: Final[dict[str, bool]] = {
     "with_metadata": False,
 }
 
-_TITLE_RE: Final[re.Pattern[str]] = re.compile(
-    r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL
-)
+_TITLE_RE: Final[re.Pattern[str]] = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 _WS_RE: Final[re.Pattern[str]] = re.compile(r"\s+")
 
 
@@ -63,7 +62,7 @@ def extract_main_text(html: str) -> str:
     if not _HAS_TRAFILATURA:
         return ""
     try:
-        text = trafilatura.extract(html, **_DEFAULT_OPTS)
+        text = trafilatura.extract(html, **_DEFAULT_OPTS)  # type: ignore[arg-type]
     except Exception:
         return ""
     return (text or "").strip()

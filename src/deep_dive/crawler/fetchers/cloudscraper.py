@@ -16,18 +16,18 @@ behaviour-for-behaviour, just wrapped in a :class:`Fetcher` subclass.
 
 from __future__ import annotations
 
+import contextlib
 import random
 import re
-from collections.abc import Iterable
 
 from deep_dive.constants import USER_AGENTS
-from deep_dive.logging_setup import safe_print
 from deep_dive.crawler.encoding import smart_decode_bytes
 
 from .base import Fetcher, FetcherError
 
 try:
     import cloudscraper
+
     _HAS_CLOUDSCRAPER = True
 except ImportError:  # pragma: no cover — cloudscraper is a hard dep
     _HAS_CLOUDSCRAPER = False
@@ -67,6 +67,17 @@ class CloudScraperFetcher(Fetcher):
         cookies: list[dict[str, str]] | None = None,
         warmup_url: str | None = None,  # unused — cloudscraper has no browser context
     ) -> tuple[str, str]:
+        """Fetch ``url`` via cloudscraper (CF-bypass, no JS execution).
+
+        Args:
+            url: target URL.
+            cookies: optional Playwright-shaped cookie dicts.
+            warmup_url: unused for cloudscraper (kept for interface
+                parity with PlaywrightFetcher).
+
+        Returns:
+            ``(html, title)`` tuple.
+        """
         try:
             scraper = self._make_scraper()
         except FetcherError:
@@ -76,15 +87,15 @@ class CloudScraperFetcher(Fetcher):
 
         if cookies:
             for c in cookies:
-                try:
+                with contextlib.suppress(Exception):
                     scraper.cookies.set(c["name"], c["value"], domain=c.get("domain"))
-                except Exception:
-                    pass
 
-        scraper.headers.update({
-            "User-Agent": random.choice(USER_AGENTS),
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        })
+        scraper.headers.update(
+            {
+                "User-Agent": random.choice(USER_AGENTS),
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            }
+        )
 
         try:
             resp = scraper.get(url, timeout=self.timeout_s)

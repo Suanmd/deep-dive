@@ -1,11 +1,9 @@
 """Domain / path blacklists used during crawl and search.
 
-Extracted from the legacy ``deep-search`` crawler module so they can
-be reused by the aggregator (topic-level stats) and the reporting
-layer (to label "low quality" entries in the report).
+Grouped here so the aggregator (topic-level stats) and the reporting
+layer (for "low quality" labels) can both reuse them.
 
-The set membership is a **substring** match on the URL host, matching the
-legacy behavior:
+Set membership is a **substring** match on the URL host:
 
     "goodreads.com" in "www.goodreads.com"       → True   (matches)
     "goodreads.com" in "goodreads-clone.io"      → False  (does not match)
@@ -19,15 +17,23 @@ from urllib.parse import urlparse
 
 from deep_dive.constants import CF_BLACK_DOMAINS, LOWQ_DOMAINS, SPAM_DOMAINS
 
-
-# Baidu sub-domains that historically need the special "warm-up + click
-# search box" bypass in Playwright. Bug fix 2026-06-08.
-BAIDU_DOMAINS: frozenset[str] = frozenset({
-    "baike.baidu.com", "wapbaike.baidu.com", "baike.baidu.com.hk",
-    "zhidao.baidu.com", "zhuanlan.baidu.com", "baijiahao.baidu.com",
-    "xuewen.baidu.com", "v.baidu.com", "image.baidu.com",
-    "baidu.com/s?", "www.baidu.com/s",
-})
+# Baidu sub-domains that need the special "warm-up + click search box"
+# bypass in Playwright.
+BAIDU_DOMAINS: frozenset[str] = frozenset(
+    {
+        "baike.baidu.com",
+        "wapbaike.baidu.com",
+        "baike.baidu.com.hk",
+        "zhidao.baidu.com",
+        "zhuanlan.baidu.com",
+        "baijiahao.baidu.com",
+        "xuewen.baidu.com",
+        "v.baidu.com",
+        "image.baidu.com",
+        "baidu.com/s?",
+        "www.baidu.com/s",
+    }
+)
 
 
 def _host_match(url: str, needles: frozenset[str]) -> bool:

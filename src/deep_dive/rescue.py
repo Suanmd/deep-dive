@@ -30,8 +30,18 @@ _SEPARATOR: Final[str] = "\n\n" + ("=" * 60) + "\n\n"
 
 
 def _paragraph_hash(paragraph: str) -> str:
-    """Stable SHA1 of a paragraph (whitespace-normalized)."""
-    return hashlib.sha1(paragraph.strip().encode("utf-8", errors="ignore")).hexdigest()
+    """Stable SHA1 of a paragraph (whitespace-normalized).
+
+    SHA1 is used here purely for content fingerprinting (deduplication
+    of identical paragraphs across tasks), NOT for security. The
+    ``usedforsecurity=False`` flag (Python 3.9+) silences Bandit's
+    B324 weak-hash warning and makes intent explicit. SHA1 is
+    acceptable for non-cryptographic hash use.
+    """
+    return hashlib.sha1(
+        paragraph.strip().encode("utf-8", errors="ignore"),
+        usedforsecurity=False,
+    ).hexdigest()
 
 
 def auto_rescue_raw(
@@ -85,7 +95,7 @@ def auto_rescue_raw(
 
     for tf in txt_files:
         try:
-            with open(tf, "r", encoding="utf-8", errors="ignore") as f:
+            with open(tf, encoding="utf-8", errors="ignore") as f:
                 text = f.read()
         except Exception:
             continue
@@ -110,7 +120,7 @@ def auto_rescue_raw(
         safe_print(f"{TAG_RESCUE} all paragraphs were duplicates, nothing to write")
         return (0, 0, None)
 
-    out_path.write_text(_SEPARATOR.join(combined_chunks), encoding="utf-8")
+    out_path.write_text(_SEPARATOR.join(combined_chunks), encoding="utf-8-sig")
     safe_print(
         f"{TAG_RESCUE} rescued {len(txt_files)} files | "
         f"paragraphs deduped={n_dedup_paragraphs} | "

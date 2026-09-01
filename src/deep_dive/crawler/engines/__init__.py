@@ -7,8 +7,10 @@ Currently implemented:
 
 * :class:`MMXEngine` — uses the external ``mmx`` CLI (provided by
   MiniMax Token Plan). Free inside the plan, fast on Chinese.
-* :class:`TavilyEngine` — wraps the ``tavily-python`` SDK. Has a
-  primary-key + backup-key auto-fallback chain.
+* :class:`TavilyEngine` — wraps the ``tavily-python`` SDK. **N-key
+  auto-fallback chain** — any number of keys, not limited to 2.
+  Pool from ``keys=[...]`` ctor arg or ``TAVILY_API_KEYS="k1,k2,..."``
+  env var.
 
 Adding a new engine is a matter of:
 
@@ -58,9 +60,7 @@ def get_engine(name: str, **kwargs) -> SearchEngine:
     """
     cls = _ENGINE_REGISTRY.get(name.lower())
     if cls is None:
-        raise SearchEngineError(
-            f"Unknown engine: {name!r}. Available: {sorted(_ENGINE_REGISTRY)}"
-        )
+        raise SearchEngineError(f"Unknown engine: {name!r}. Available: {sorted(_ENGINE_REGISTRY)}")
     return cls(**kwargs)
 
 

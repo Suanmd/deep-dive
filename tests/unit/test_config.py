@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from deep_dive.config import Config, load_config
+from deep_dive.config import load_config
 
 
 class TestDefaults:

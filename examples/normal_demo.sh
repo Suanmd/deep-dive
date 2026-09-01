@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # 主题：演示英文 + 中文双语搜索
-QUERY="${QUERY:-<query> 1587}"
+QUERY="${QUERY:-人工智能 2026}"
 
 echo "==> deep-dive normal demo"
 echo "    query: $QUERY"

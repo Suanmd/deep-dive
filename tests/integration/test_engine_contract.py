@@ -16,7 +16,6 @@ from deep_dive.crawler.engines.base import (
     SearchEngineQuotaError,
     SearchEngineTimeoutError,
 )
-from deep_dive.filters.canonical import canonicalize_url
 from deep_dive.types import SearchHit
 
 
@@ -36,8 +35,9 @@ class _StubEngine(SearchEngine):
             raise SearchEngineTimeoutError("stub timeout")
         if self.quota:
             raise SearchEngineQuotaError("stub quota")
-        return [SearchHit(url=u, title=f"Title {i}", engine=self.name)
-                for i, u in enumerate(self.urls[:topk])]
+        return [
+            SearchHit(url=u, title=f"Title {i}", engine=self.name) for i, u in enumerate(self.urls[:topk])
+        ]
 
 
 class TestEngineRegistry:
@@ -66,6 +66,7 @@ class TestEngineRegistry:
             # Best-effort cleanup; not strictly required since registry
             # is process-local.
             from deep_dive.crawler.engines import _ENGINE_REGISTRY
+
             _ENGINE_REGISTRY.pop("stub_test", None)
 
 
@@ -98,7 +99,7 @@ class TestEngineFiltersOutput:
         # Stub returning spam + clean URLs
         urls = [
             "https://example.com/a",  # clean
-            "https://doc88.com/123",   # spam → dropped
+            "https://doc88.com/123",  # spam → dropped
             "https://example.com/b",  # clean
         ]
         e = _StubEngine(urls)

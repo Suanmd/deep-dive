@@ -18,10 +18,9 @@ deep-dive 抓取时通过 cookie 注入绕过。
 
 优先级（高 → 低）：
 
-1. `--cookie-file PATH` CLI flag（计划中；当前未实现）
-2. `DEEP_DIVE_COOKIE_FILE` 环境变量（绝对路径）
-3. `<output_dir>/../config/cookies.json`（旧版布局兼容）
-4. `./config/cookies.json`（项目根）
+1. `DEEP_DIVE_COOKIE_FILE` 环境变量（绝对路径）
+2. `<output_dir>/../config/cookies.json`（旧版布局兼容）
+3. `./config/cookies.json`（项目根）
 
 ## 文件格式
 
@@ -40,7 +39,7 @@ deep-dive 抓取时通过 cookie 注入绕过。
       }
     ],
     "note": "（可选，仅自己看）",
-    "last_updated": "2026-07-26"
+    "last_updated": "2026-08-31"
   },
   "baidu_wenku": {
     "domain": ".baidu.com",

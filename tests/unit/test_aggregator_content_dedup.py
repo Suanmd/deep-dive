@@ -14,29 +14,22 @@ longer chars).
 from __future__ import annotations
 
 import dataclasses
-import json
 from pathlib import Path
-
-import pytest
 
 from deep_dive.aggregator import (
     _content_fingerprint,
     _content_fingerprint_dedup,
     _is_better_candidate,
-    Aggregator,
 )
 from deep_dive.types import (
-    AggregatedResult,
     FetchResult,
     FetchStatus,
-    TaskResult,
-    TaskStatus,
 )
-
 
 # ---------------------------------------------------------------------------
 # Unit tests for the helpers
 # ---------------------------------------------------------------------------
+
 
 class TestContentFingerprint:
     def test_returns_none_for_empty_inputs(self):
@@ -93,7 +86,10 @@ class TestContentFingerprint:
 class TestIsBetterCandidate:
     def _fr(self, title="", chars=0):
         return FetchResult(
-            url="http://x", status=FetchStatus.SUCCESS, title=title, chars=chars,
+            url="http://x",
+            status=FetchStatus.SUCCESS,
+            title=title,
+            chars=chars,
         )
 
     def test_title_wins_over_no_title(self):
@@ -120,6 +116,7 @@ class TestIsBetterCandidate:
 # ---------------------------------------------------------------------------
 # Integration test: dedup on a small URL set
 # ---------------------------------------------------------------------------
+
 
 def _fr_for(url: str, title: str, body: str, tmp_path: Path) -> FetchResult:
     p = tmp_path / (url.replace("/", "_").replace(":", "") + ".txt")
@@ -230,10 +227,14 @@ class TestContentFingerprintDedup:
         """URLs without .txt files or empty bodies should still work
         (fingerprint falls back to title-only)."""
         a = FetchResult(
-            url="http://a.com/x", status=FetchStatus.SUCCESS, title="Same Title",
+            url="http://a.com/x",
+            status=FetchStatus.SUCCESS,
+            title="Same Title",
         )  # no txt_path
         b = FetchResult(
-            url="http://b.com/x", status=FetchStatus.SUCCESS, title="Same Title",
+            url="http://b.com/x",
+            status=FetchStatus.SUCCESS,
+            title="Same Title",
         )
         url_to_meta = {"http://a.com/x": a, "http://b.com/x": b}
         url_sources = {u: ["src"] for u in url_to_meta}

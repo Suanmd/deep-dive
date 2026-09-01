@@ -15,7 +15,7 @@ Step 2: 多语言扩展判断
   ↓
 Step 3: 生成搜索矩阵
   ↓
-Step 4: 调用 deep_search.py（并行 4-5 组）
+Step 4: 调用 deep-dive（编排器并行派发 4-5 组任务）
   ↓
 Step 5: 内部流程（Playwright + cloudscraper + cookie）
   ↓
@@ -66,12 +66,23 @@ variants = generate_variants("<query>")
 ```
 
 ```python
-from deep_dive.orchestrator import build_search_matrix
-matrix = build_search_matrix(
+from deep_dive.types import ResearchPlan
+from deep_dive.orchestrator import build_search_matrix_from_plan
+
+plan = ResearchPlan(
     query="<query>",
-    config=cfg,
-    variants=variants,
+    kind="humanities",  # 来自 Step 1 的 detect_query_kind 结果
+    depth="normal",
+    language_priority="balanced",
+    english_search_terms=["<book-title-en>"],
+    variants=variants,  # 来自 Step 3 的 generate_variants 结果
+    target_sites=[],     # 可选：定到 arxiv.org / wikipedia.org 等
+    relevance_threshold=0.30,
 )
+
+matrix, dropped_tasks = build_search_matrix_from_plan(plan=plan, config=cfg)
+# matrix: list[MatrixRow]，每行 = 一个并行任务
+# dropped_tasks: 被 max_queries 截断的 plan 任务（cap 调试用）
 ```
 
 输出 `list[MatrixRow]`，每个 row = 一个并行任务。

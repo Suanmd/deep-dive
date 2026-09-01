@@ -38,6 +38,7 @@ dependencies = [
     "tavily-python>=0.3.0",
     "playwright>=1.40.0",
     "cloudscraper>=1.2.71",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -49,10 +50,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.7.0",
     "types-requests",
-]
-docs = [
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.4.0",
+    "types-PyYAML",
 ]
 
 [project.urls]
@@ -136,6 +134,52 @@ no_implicit_optional = true
 check_untyped_defs = false
 ignore_missing_imports = true
 files = ["src/deep_dive"]
+
+# `deep_dive.logging_setup` calls `ctypes.windll` inside an
+# `if os.name == "nt":` block to detect the Windows console codepage.
+# `ctypes.windll` only exists in the typeshed on Windows, so on
+# Linux/macOS CI runners mypy emits `attr-defined`. We need the
+# `# type: ignore[attr-defined]` comment on that line for Linux CI,
+# but on Windows local dev the attribute IS in the typeshed and
+# mypy would then warn `unused-ignore`. Suppress unused-ignore
+# warnings for this module only — the type-ignore is platform-gated
+# by design and is not actually dead.
+[[tool.mypy.overrides]]
+module = "deep_dive.logging_setup"
+warn_unused_ignores = false
+
+# ---------------------------------------------------------------------------
+# Bandit (security linter)
+# ---------------------------------------------------------------------------
+# B112 (try_except_continue) is intentionally used throughout the
+# crawler pipeline to skip individual bad files / dead URLs / partial
+# reads without aborting the whole task. This is a legitimate
+# resilience pattern for fetch-heavy code, not a real bug. Suppress
+# project-wide; if a future refactor introduces a real exception
+# swallowing bug, prefer # nosec B112 + log.warning() over removal.
+# B324 (weak SHA1) is silenced inline via usedforsecurity=False on the
+# one call site that uses SHA1 for non-cryptographic content hashing.
+[tool.bandit]
+exclude_dirs = ["tests", "build", "dist"]
+# B112 (try_except_continue): legitimate resilience pattern in the
+#         crawler pipeline — skip individual bad files / dead URLs
+#         without aborting the whole task. Use # nosec B112 + log.warning()
+#         rather than removal if a real exception-swallowing bug surfaces.
+# B110 (try_except_pass): same rationale as B112 — encoding detection
+#         and playwright warm-up failures are non-fatal by design.
+# B311 (random for security): random.choice / random.uniform are used
+#         for user-agent rotation and crawl-pacing jitter, NOT for
+#         security. Crawler fingerprinting requires unpredictability,
+#         not cryptographic strength. Use `secrets` only if we ever
+#         need to mint tokens / API keys.
+# B404 (subprocess): mmx.py invokes the mmx CLI as a subprocess by
+#         design — there's no in-process alternative. Input comes
+#         from the user-supplied query and engine config; both are
+#         sanitized at the orchestrator boundary.
+# B603 (subprocess without shell): the mmx subprocess call is invoked
+#         with a list, not a shell string, so this is a false positive.
+#         bandit doesn't always detect list-form calls correctly.
+skips = ["B112", "B110", "B311", "B404", "B603"]
 
 # ---------------------------------------------------------------------------
 # Coverage

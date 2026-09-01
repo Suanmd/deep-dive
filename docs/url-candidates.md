@@ -37,7 +37,7 @@ url-pool/
   "publish_date": "2024-03-28",
   "category": "government/policy",
   "tags": ["国务院", "数字经济", "指导意见"],
-  "last_verified": "2026-07-26",
+  "last_verified": "2026-08-31",
   "reliability": "primary",
   "backup_urls": [
     "https://www.gov.cn/zhengce/2024-03/28/content_6943xxx.htm",

@@ -23,7 +23,7 @@ actually a "everything we got was spam" problem).
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from deep_dive.constants import (
@@ -60,12 +60,11 @@ class FilterStats:
     invalid: int = 0
 
     def as_log_line(self) -> str:
-        return (
-            f"kept={self.total_kept}/{self.total_in} | "
-            f"dropped: {self.to_drop_dict()}"
-        )
+        """One-line human-readable summary suitable for ``safe_print``."""
+        return f"kept={self.total_kept}/{self.total_in} | dropped: {self.to_drop_dict()}"
 
     def to_drop_dict(self) -> dict[str, int]:
+        """Serialize the per-stage drop counts to a plain dict."""
         return {
             "spam_domain": self.spam_domain,
             "blacklist_path": self.blacklist_path,
@@ -84,16 +83,11 @@ def _is_spam_or_black(url: str) -> bool:
         return True  # unparseable → treat as spam (drop)
     if not host:
         return True
-    for d in SPAM_DOMAINS:
-        if d in host:
-            return True
-    for d in CF_BLACK_DOMAINS:
-        if d in host:
-            return True
-    for d in LOWQ_DOMAINS:
-        if d in host:
-            return True
-    return False
+    return (
+        any(d in host for d in SPAM_DOMAINS)
+        or any(d in host for d in CF_BLACK_DOMAINS)
+        or any(d in host for d in LOWQ_DOMAINS)
+    )
 
 
 def _has_blacklist_path(url: str) -> bool:
@@ -124,7 +118,7 @@ def smart_filter_urls(
     stats = FilterStats()
     if urls is None:
         if verbose:
-            safe_print(f"[SMART-FILTER] kept=0/0")
+            safe_print("[SMART-FILTER] kept=0/0")
         return []
 
     out: list[str] = []

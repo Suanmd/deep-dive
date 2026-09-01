@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from deep_dive.relevance import (
     _extract_core_entities,
     core_entity_hitrate,
@@ -87,9 +85,6 @@ class TestIsQueryIrrelevant:
         assert is_query_irrelevant(text, "黄金投资") is True
 
     def test_aliyun_menu_miss_regression(self):
-        # Regression: aliyun menu pages have high single-character
-        # density but no core entity match, so the relevance check
-        # must still reject them.
         text = "aliyun 存储 存储芯片 能效 产品 价格"
         assert is_query_irrelevant(text, "长鑫 DRAM") is True
 

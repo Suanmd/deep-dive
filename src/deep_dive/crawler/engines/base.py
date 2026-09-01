@@ -27,9 +27,11 @@ from __future__ import annotations
 import abc
 import asyncio
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeoutError
-from dataclasses import dataclass, field
-from typing import Any, Mapping
+from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as _FutTimeoutError
+from dataclasses import dataclass
+from typing import Any
 
 from deep_dive.filters.url_filter import smart_filter_urls
 from deep_dive.types import SearchHit
@@ -64,8 +66,9 @@ class SearchEngineNetworkError(SearchEngineError):
 
 
 # ---------------------------------------------------------------------------
-# Multi-credential primitives 
+# Multi-credential primitives
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class EngineCredential:
@@ -104,7 +107,9 @@ class EngineAccountPool:
     sharing one engine instance don't race on the ``exhausted`` set.
     """
 
-    def __init__(self, credentials: list[EngineCredential] | tuple[EngineCredential, ...], *, name: str = "pool") -> None:
+    def __init__(
+        self, credentials: list[EngineCredential] | tuple[EngineCredential, ...], *, name: str = "pool"
+    ) -> None:
         self.name = name
         self.credentials: tuple[EngineCredential, ...] = tuple(credentials)
         self.exhausted: set[str] = set()
@@ -119,15 +124,18 @@ class EngineAccountPool:
         return None
 
     def mark_exhausted(self, name: str) -> None:
+        """Mark a credential as exhausted for this run (thread-safe)."""
         with self._lock:
             self.exhausted.add(name)
 
     def reset(self) -> None:
+        """Clear exhausted state (e.g. after waiting for quota to renew)."""
         with self._lock:
             self.exhausted.clear()
 
     @property
     def is_fully_exhausted(self) -> bool:
+        """True when every credential in the pool is exhausted."""
         if not self.credentials:
             return True
         with self._lock:
@@ -135,18 +143,22 @@ class EngineAccountPool:
 
     @property
     def active_count(self) -> int:
+        """Number of credentials not yet exhausted."""
         return sum(1 for c in self.credentials if c.name not in self.exhausted)
 
     @property
     def total_count(self) -> int:
+        """Total number of credentials in the pool."""
         return len(self.credentials)
 
     @property
     def exhausted_names(self) -> tuple[str, ...]:
+        """Names of exhausted credentials (preserves credential order)."""
         return tuple(c.name for c in self.credentials if c.name in self.exhausted)
 
     @property
     def active_names(self) -> tuple[str, ...]:
+        """Names of non-exhausted credentials (preserves credential order)."""
         return tuple(c.name for c in self.credentials if c.name not in self.exhausted)
 
 
@@ -192,12 +204,10 @@ class SearchEngine(abc.ABC):
             fut = ex.submit(self._raw_search, query, topk)
             try:
                 hits = fut.result(timeout=self.timeout_s)
-            except (asyncio.TimeoutError, _FutTimeoutError):
+            except (asyncio.TimeoutError, _FutTimeoutError) as err:
                 # Both asyncio.TimeoutError and concurrent.futures.TimeoutError
                 # are aliases for the builtin TimeoutError in Python 3.11+.
-                raise SearchEngineTimeoutError(
-                    f"{self.name}: timeout after {self.timeout_s}s"
-                )
+                raise SearchEngineTimeoutError(f"{self.name}: timeout after {self.timeout_s}s") from err
 
         return self._post_filter(hits, topk)
 
@@ -249,12 +259,14 @@ class SearchEngine(abc.ABC):
 def canonicalize_keep(url: str) -> str:
     """Stable host+path lower form for inclusion checks after filter."""
     from deep_dive.filters.canonical import canonicalize_url
+
     return canonicalize_url(url)
 
 
 # ---------------------------------------------------------------------------
-# Multi-key engine 
+# Multi-key engine
 # ---------------------------------------------------------------------------
+
 
 class MultiKeyEngine(SearchEngine):
     """Search engine that can rotate across multiple credentials.
@@ -385,13 +397,9 @@ class MultiKeyEngine(SearchEngine):
         credential in order, retry on RETRYABLE_ERRORS.
         """
         if not self.pool.credentials:
-            raise SearchEngineError(
-                f"{self.name}: no credentials configured (empty pool)"
-            )
+            raise SearchEngineError(f"{self.name}: no credentials configured (empty pool)")
         if self.pool.is_fully_exhausted:
-            raise SearchEngineQuotaError(
-                f"{self.name}: all credentials already exhausted before query"
-            )
+            raise SearchEngineQuotaError(f"{self.name}: all credentials already exhausted before query")
         while True:
             cred = self.pool.next_active()
             if cred is None:

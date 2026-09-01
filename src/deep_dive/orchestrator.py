@@ -10,10 +10,10 @@ It:
 5. Builds the ``report.md`` (when ``--no-report`` is not set).
 6. Appends the Capy summary section (when ``--no-capy`` is not set).
 
-Why split this out of the legacy monolith?
+Why split this out into its own module?
 -------------------------------------------
 
-The legacy ``deep_search.py`` was 57 KB and conflated five distinct
+The pre-split ``orchestrator.py`` was 57 KB and conflated five distinct
 responsibilities (CLI parsing, search-matrix construction, parallel
 task dispatch, result aggregation, and report generation). In the new
 package:
@@ -32,47 +32,37 @@ agent loop.
 
 from __future__ import annotations
 
-import asyncio
 import concurrent.futures
 import json
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from deep_dive.aggregator import Aggregator, AggregatedResult
+from deep_dive.aggregator import AggregatedResult, Aggregator
 from deep_dive.config import Config
 from deep_dive.constants import (
-    DEFAULT_GLOBAL_TIMEOUT_S,
     DEFAULT_HEARTBEAT_INTERVAL_S,
     DEFAULT_TASK_TIMEOUT_S,
     LOWQ_DOMAINS,
-    MEDIUM_ALTERNATIVES,
     TAG_DONE,
     TAG_ERR,
     TAG_FIRE,
     TAG_HEARTBEAT,
-    TAG_INFO,
     TAG_OK,
-    TAG_TIME,
     TAG_WARN,
 )
 from deep_dive.crawler.engines import DuckDuckGoEngine, MMXEngine, TavilyEngine
 from deep_dive.crawler.engines.base import SearchEngine, SearchEngineError, SearchEngineQuotaError
-from deep_dive.crawler.fetchers import CloudScraperFetcher, PlaywrightFetcher
+from deep_dive.crawler.fetchers import CloudScraperFetcher, Fetcher, PlaywrightFetcher
 from deep_dive.crawler.pipeline import CrawlPipeline, PipelineConfig
-from deep_dive.local_langs import detect_local_langs
 from deep_dive.logging_setup import safe_print
 from deep_dive.query_classifier import (
     kind_from_plan,
     pick_site_query,
-    sites_from_plan,
-    template_from_plan,
 )
 from deep_dive.query_variants import generate_variants_from_plan, variant_note_label
-from deep_dive.relevance import is_query_irrelevant
 from deep_dive.reporting.builder import build_report
 from deep_dive.reporting.capy_summary import append_capy_section
 from deep_dive.rescue import auto_rescue_raw
@@ -81,15 +71,15 @@ from deep_dive.types import (
     FetchResult,
     FetchStatus,
     MatrixRow,
-    QueryKind,
     ResearchPlan,
+    SearchHit,
     TaskResult,
     TaskStatus,
     detect_kind,
 )
 
 
-def auto_plan(query: str) -> ResearchPlan:
+def auto_plan(query: str, *, config: Config | None = None) -> ResearchPlan:
     """Generate a smart minimal ResearchPlan when the caller does not supply one.
 
     Auto-decisions:
@@ -108,10 +98,20 @@ def auto_plan(query: str) -> ResearchPlan:
       - ``target_sites``: for tech queries, defaults to
         ``("arxiv.org", "github.com", "paperswithcode.com")`` — the
         three primary-source hubs the user almost always wants for
-        AI/CS topics. For other kinds the list is empty (let search
-        engines find content organically).
+        AI/CS topics. For business queries, defaults to
+        ``("statista.com", "ft.com", "sec.gov")`` — financial-data
+        primaries that *do* work through Tavily/MMX (Reuters/Bloomberg
+        are documented to return no_results via Tavily). For movies /
+        general / news the list is empty (let search engines find
+        content organically).
       - ``relevance_threshold``: 0.40 (matches the keyword-score gate
         the relevance module uses for two-stage filtering).
+      - ``depth``: **inherited from config** when config is supplied,
+        else ``"normal"``. This was previously hardcoded to
+        ``"normal"`` which produced misleading summary.json (the plan
+        field claimed normal even when the user passed ``--depth
+        full``). Now the plan accurately reflects what was actually
+        run.
 
     An LLM is still welcome to override any of these via ``--plan``.
     """
@@ -119,15 +119,36 @@ def auto_plan(query: str) -> ResearchPlan:
     kind = detect_kind(query)
     is_tech = kind == "tech"
 
-    # Primary-source sites for tech queries. arXiv.org is the canonical
-    # preprint host for AI/CS; github.com hosts reference implementations
-    # and benchmark code; paperswithcode.com links papers to their code
-    # + benchmark results. The matrix builder emits site-targeted rows
-    # for the first N of these (N depends on depth: 2 for normal, 3 for
-    # full, 0 for quick).
-    target_sites: tuple[str, ...] = (
-        ("arxiv.org", "github.com", "paperswithcode.com") if is_tech else ()
-    )
+    # Resolve depth from config when available; else default to normal.
+    plan_depth = config.depth if config is not None else "normal"
+
+    # Primary-source sites by kind. arXiv.org is the canonical preprint
+    # host for AI/CS; github.com hosts reference implementations and
+    # benchmark code; paperswithcode.com links papers to their code +
+    # benchmark results. Business queries benefit from explicit financial
+    # data hubs (statista), authoritative news (FT), and the primary
+    # regulatory source (SEC). Reuters and Bloomberg are intentionally
+    # excluded — see SKILL.md "Known Quirk" section: they return
+    # no_results through Tavily.
+    if is_tech:
+        target_sites: tuple[str, ...] = ("arxiv.org", "github.com", "paperswithcode.com")
+    elif kind == "business":
+        target_sites = ("statista.com", "ft.com", "sec.gov")
+    elif kind == "movies":
+        target_sites = ("rottentomatoes.com", "metacritic.com", "boxofficemojo.com")
+    else:
+        # Music/media detection
+        from deep_dive.constants import (
+            MUSIC_QUERY_TRIGGERS_EN,
+            MUSIC_QUERY_TRIGGERS_ZH,
+            MUSIC_TARGET_SITES,
+        )
+
+        q_lower = query.lower()
+        is_music_query = any(t in query for t in MUSIC_QUERY_TRIGGERS_ZH) or any(
+            t in q_lower for t in MUSIC_QUERY_TRIGGERS_EN
+        )
+        target_sites = MUSIC_TARGET_SITES if is_music_query else ()
 
     # English baseline task: keep it for tech queries (so we surface
     # arXiv papers even when the user typed Chinese) and for all
@@ -184,7 +205,7 @@ def auto_plan(query: str) -> ResearchPlan:
     return ResearchPlan(
         query=query,
         kind=kind,
-        depth="normal",
+        depth=plan_depth,
         language_priority="zh" if is_chinese else "en",
         english_search_terms=english_terms,
         variants=variants,
@@ -194,7 +215,8 @@ def auto_plan(query: str) -> ResearchPlan:
             f"Auto-generated plan. kind={kind} "
             f"language_priority={'zh-primary' if is_chinese else 'en-primary'} "
             f"target_sites={list(target_sites) or 'none'} "
-            f"english_baseline={'yes' if english_terms else 'no'}."
+            f"english_baseline={'yes' if english_terms else 'no'} "
+            f"depth_inherited={'yes' if config is not None else 'no'}."
         ),
     )
 
@@ -244,7 +266,9 @@ def build_search_matrix_from_plan(
     topk = config.topk_for()
     max_q = config.max_queries_for()
     default_exclude = list(LOWQ_DOMAINS) + [
-        "csdn.net", "baike.baidu.com", "sohu.com",
+        "csdn.net",
+        "baike.baidu.com",
+        "sohu.com",
     ]
 
     # Build candidates in priority order. Slice at cap; report drops.
@@ -273,58 +297,59 @@ def build_search_matrix_from_plan(
     # the contract: a Chinese query on a Chinese-only plan must
     # keep using the Chinese query, never be silently upgraded to English.
     _use_english_for_sites = bool(plan.english_search_terms) and plan.language_priority != "zh-only"
-    _site_fallback = (
-        plan.english_search_terms[0] if _use_english_for_sites else plan.query
-    )
+    _site_fallback = plan.english_search_terms[0] if _use_english_for_sites else plan.query
 
     # ---- 1. Site-targeted (always first — primary source value) ---------
-    n_site = 2 if config.depth == "normal" else (3 if config.depth == "full" else 0)
+    n_site = 3 if config.depth == "normal" else (6 if config.depth == "full" else 0)
     for site in plan.target_sites[:n_site]:
         site_q = pick_site_query(
             site,
             plan.english_search_terms if _use_english_for_sites else (),
             fallback=_site_fallback,
         )
-        candidates.append((
-            f"站点定向:{site}",
-            MatrixRow(
-                note=f"站点定向:{site}",
-                query=f"{site_q} site:{site}",
-                topk=12,
-                exclude=tuple(default_exclude),
-            ),
-        ))
+        candidates.append(
+            (
+                f"站点定向:{site}",
+                MatrixRow(
+                    note=f"站点定向:{site}",
+                    query=f"{site_q} site:{site}",
+                    topk=12,
+                    exclude=tuple(default_exclude),
+                ),
+            )
+        )
 
     # ---- 2. Chinese original (always if zh) -----------------------------
     if plan.language_priority != "en-only":
-        candidates.append((
-            "中文原始",
-            MatrixRow(
-                note="中文原始",
-                query=plan.query,
-                topk=topk,
-                exclude=tuple(default_exclude),
-            ),
-        ))
+        candidates.append(
+            (
+                "中文原始",
+                MatrixRow(
+                    note="中文原始",
+                    query=plan.query,
+                    topk=topk,
+                    exclude=tuple(default_exclude),
+                ),
+            )
+        )
 
     # ---- 3. English baseline (cross-language contrast, ALWAYS reserved) -
     # this slot is reserved BEFORE Chinese variants so it survives
     # cap-tight scenarios. If english_search_terms is empty OR
     # language_priority is "zh-only", skip this slot.
-    has_english = (
-        bool(plan.english_search_terms)
-        and plan.language_priority != "zh-only"
-    )
+    has_english = bool(plan.english_search_terms) and plan.language_priority != "zh-only"
     if has_english:
-        candidates.append((
-            "英文基础",
-            MatrixRow(
-                note="英文基础",
-                query=plan.english_search_terms[0],
-                topk=topk,
-                exclude=tuple(default_exclude),
-            ),
-        ))
+        candidates.append(
+            (
+                "英文基础",
+                MatrixRow(
+                    note="英文基础",
+                    query=plan.english_search_terms[0],
+                    topk=topk,
+                    exclude=tuple(default_exclude),
+                ),
+            )
+        )
 
     # ---- 4. Chinese variants (plan.variants, in declared order) ---------
     # each variant's query string may use ``||`` as a
@@ -354,19 +379,25 @@ def build_search_matrix_from_plan(
                 continue
             note = variant_note_label(variant_key)
             for sub_q in unique_parts:
-                candidates.append((
-                    f"variant:{variant_key}",
-                    MatrixRow(
-                        note=note,
-                        query=sub_q,
-                        topk=max(2, topk - 5),
-                        exclude=tuple(default_exclude),
-                    ),
-                ))
+                candidates.append(
+                    (
+                        f"variant:{variant_key}",
+                        MatrixRow(
+                            note=note,
+                            query=sub_q,
+                            topk=max(2, topk - 5),
+                            exclude=tuple(default_exclude),
+                        ),
+                    )
+                )
 
-    # ---- 5. English variants (en_variant, en_academic) ------------------
+    # ---- 5. English variants (en_variant, en_academic, ...) -----------
+    # Generate one row per remaining english_search_terms (i.e. terms[1:]).
+    # Earlier this was hard-capped at 2 (terms[1:3]) which silently dropped
+    # later entries like gantenerumab / crenezumab. Now we add ALL remaining
+    # terms and let the cap-slice at the bottom decide what survives.
     if has_english and len(plan.english_search_terms) >= 2:
-        for i, term in enumerate(plan.english_search_terms[1:3], start=1):
+        for i, term in enumerate(plan.english_search_terms[1:], start=1):
             if i == 1:
                 note = "英文案例"
                 this_topk = max(2, topk - 3)
@@ -376,15 +407,17 @@ def build_search_matrix_from_plan(
             else:
                 note = f"英文补充{i + 1}"
                 this_topk = max(2, topk - 5)
-            candidates.append((
-                f"en_variant:{i}",
-                MatrixRow(
-                    note=note,
-                    query=term,
-                    topk=this_topk,
-                    exclude=tuple(default_exclude),
-                ),
-            ))
+            candidates.append(
+                (
+                    f"en_variant:{i}",
+                    MatrixRow(
+                        note=note,
+                        query=term,
+                        topk=this_topk,
+                        exclude=tuple(default_exclude),
+                    ),
+                )
+            )
 
     # ---- 6. Universal supplementary (P2 critique) -----------------------
     if config.depth in ("normal", "full"):
@@ -392,15 +425,17 @@ def build_search_matrix_from_plan(
             "critique",
             f"{plan.query} 争议 批评 局限性 反对意见",
         )
-        candidates.append((
-            "P2-反方视角",
-            MatrixRow(
-                note="P2-反方视角",
-                query=critique_q,
-                topk=max(2, topk - 8),
-                exclude=tuple(default_exclude),
-            ),
-        ))
+        candidates.append(
+            (
+                "P2-反方视角",
+                MatrixRow(
+                    note="P2-反方视角",
+                    query=critique_q,
+                    topk=max(2, topk - 8),
+                    exclude=tuple(default_exclude),
+                ),
+            )
+        )
 
     # Slice to cap, surface drops
     kept = candidates[:max_q]
@@ -411,11 +446,6 @@ def build_search_matrix_from_plan(
 # ---------------------------------------------------------------------------
 # Single-task runner
 # ---------------------------------------------------------------------------
-
-def _slug_dir_name(query: str) -> str:
-    """Filesystem-safe directory name from a query (mirror legacy behavior)."""
-    import re
-    return re.sub(r'[\\/*?:"<>|]', "_", query).strip()[:80] or "search"
 
 
 def _run_one_task(
@@ -451,7 +481,7 @@ def _run_one_task(
         **Fallback chain**: in ``auto`` mode (default), if mmx returns
         fewer URLs than ``topk`` (e.g. niche query, partial coverage),
         Tavily is called with the remainder to fill the gap. This
-        restores the legacy ``search_urls()`` behaviour that was lost
+        restores the single-step fallback chain behaviour
         when we split engines into separate ``SearchEngine`` classes.
 
         **Early ``mkdir``**: ``task_dir`` is created BEFORE any engine
@@ -477,13 +507,6 @@ def _run_one_task(
     # silently ignores it and returns generic hits — every one of which
     # then gets dropped by the P1 site-targeted post-filter.
     #
-    # User-reported incident (2026-08-29): a run on "<query-tech>"
-    # with ``site:arxiv.org`` returned 0 URLs because MMX gave back 9
-    # off-domain hits that all failed the post-filter, and the engine
-    # fallback chain never got a chance to try Tavily (the old code had
-    # ``use_mmx_only = ... or site_targeted`` which hard-coded site-
-    # targeted to MMX).
-    #
     # Only kick in when:
     #   - Tavily is actually available (``engines.get("tavily")`` is not None)
     #   - User did NOT explicitly disable it (``--no-tavily``)
@@ -502,7 +525,7 @@ def _run_one_task(
     #   1. ``--search-engine tavily``   → Tavily only, no fallback
     #   2. ``--search-engine mmx`` or ``--no-tavily`` → MMX only, no fallback
     #   3. auto + site-targeted         → Tavily primary, MMX fallback
-    #   4. auto + non-site-targeted     → MMX primary, Tavily fallback (legacy)
+    #   4. auto + non-site-targeted     → MMX primary, Tavily fallback
     if config.search_engine == "tavily":
         primary_engine = engines.get("tavily")
         fallback_engine = None  # user explicitly chose Tavily-only
@@ -549,7 +572,7 @@ def _run_one_task(
     # Initialise fallback_status BEFORE the 1b degradation step so the
     # degradation block can record its outcome (ok/quota/failed) without
     # hitting a NameError, and so step 2's unconditional reset doesn't
-    # clobber it. The legacy single-step fallback chain used to set this
+    # clobber it. The single-step fallback chain used to set this
     # here, but split the logic into two passes that both want
     # to write to it.
     fallback_status = "skipped"
@@ -558,7 +581,7 @@ def _run_one_task(
     # When primary hits QUOTA, promote fallback_engine to primary and
     # retry. Rationale: MMX and Tavily have **independent quota
     # systems** — a mmx-quota exhaustion says nothing about Tavily
-    # availability. The legacy "skip Tavily on quota" rule (preserved
+    # availability. The "skip Tavily on quota" rule (preserved
     # in the fallback chain below) was a relic of the old monolithic
     # engine layer.
     # Exemptions:
@@ -587,7 +610,7 @@ def _run_one_task(
             degraded_to = fb_name
             primary_status = "ok"
             primary_error = None
-            fallback_status = "ok"     # degradation recovered the task
+            fallback_status = "ok"  # degradation recovered the task
         except SearchEngineQuotaError:
             # Both engines quota-exhausted: degrade_to records this so the
             # audit log shows the secondary attempt also failed.
@@ -608,13 +631,17 @@ def _run_one_task(
     # Note: fallback_status was set above ("skipped" or whatever 1b wrote);
     # we only overwrite it if we actually run this block.
     fallback_used = bool(degraded_to)
-    fallback_audit = fallback_audit if "fallback_audit" in locals() else {"key_used": None, "keys_tried": [], "keys_exhausted": []}
+    fallback_audit = (
+        fallback_audit
+        if "fallback_audit" in locals()
+        else {"key_used": None, "keys_tried": [], "keys_exhausted": []}
+    )
     if (
         primary_status != "quota"
         and fallback_engine is not None
         and fallback_engine is not primary_engine
         and degraded_to is None  # skip if already used for degradation
-        and len(hits) < row.topk              # got partial coverage; try to fill
+        and len(hits) < row.topk  # got partial coverage; try to fill
     ):
         # Request 2x the gap so smart_filter / dedup doesn't leave us short
         need = max((row.topk - len(hits)) * 2, row.topk)
@@ -640,7 +667,7 @@ def _run_one_task(
     # 1c. Ultimate fallback (fix): DuckDuckGo as the last-resort
     # engine so quota exhaustion of MMX+Tavily never causes a task to
     # return 0 URLs. DDG has no API key and no per-IP quota, so we
-    # always try it when both primary and (legacy) fallback returned
+    # always try it when both primary and fallback returned
     # nothing usable. This is the user's invariant: "配额超了就应该
     # fallback 到下一个优先级的引擎/KEY，不应该影响搜索质量。"
     ultimate_engine = engines.get("duckduckgo")
@@ -671,12 +698,6 @@ def _run_one_task(
             ultimate_status = f"failed:{type(e).__name__}"
 
     # 2c. Site-targeted fallback ()
-    # When the site-targeted task returns 0 hits from mmx, retry once with
-    # the site: prefix stripped. Rationale: some English-first sites have
-    # indexed content but ``site:domain + 中文 query`` returns 0 results
-    # even when English-language pages exist (e.g. ``site:lmsys.org 大模型
-    # 天梯榜 2026`` → 0; same query without ``site:`` recovers English hits).
-    # Costs ~1 s because we re-use the same engine.
     site_fallback_used = False
     site_fallback_status: str | None = None
     if (
@@ -710,8 +731,11 @@ def _run_one_task(
         if not kept:
             # Every hit was off-site — surface this as a clean no-result.
             return TaskResult(
-                note=row.note, query=row.query, status=TaskStatus.NO_RESULTS,
-                output_dir=task_dir, duration_seconds=time.time() - start,
+                note=row.note,
+                query=row.query,
+                status=TaskStatus.NO_RESULTS,
+                output_dir=task_dir,
+                duration_seconds=time.time() - start,
                 extra={
                     "engine": _engine_name(primary_engine),
                     "fallback_used": fallback_used,
@@ -748,20 +772,31 @@ def _run_one_task(
     }
     if primary_status == "quota":
         return TaskResult(
-            note=row.note, query=row.query, status=TaskStatus.QUOTA_EXCEEDED,
-            output_dir=task_dir, duration_seconds=time.time() - start,
-            error=primary_error, extra=base_extra,
+            note=row.note,
+            query=row.query,
+            status=TaskStatus.QUOTA_EXCEEDED,
+            output_dir=task_dir,
+            duration_seconds=time.time() - start,
+            error=primary_error,
+            extra=base_extra,
         )
     if primary_status == "failed":
         return TaskResult(
-            note=row.note, query=row.query, status=TaskStatus.FAILED,
-            output_dir=task_dir, duration_seconds=time.time() - start,
-            error=primary_error, extra=base_extra,
+            note=row.note,
+            query=row.query,
+            status=TaskStatus.FAILED,
+            output_dir=task_dir,
+            duration_seconds=time.time() - start,
+            error=primary_error,
+            extra=base_extra,
         )
     if not hits:
         return TaskResult(
-            note=row.note, query=row.query, status=TaskStatus.NO_RESULTS,
-            output_dir=task_dir, duration_seconds=time.time() - start,
+            note=row.note,
+            query=row.query,
+            status=TaskStatus.NO_RESULTS,
+            output_dir=task_dir,
+            duration_seconds=time.time() - start,
             extra=base_extra,
         )
 
@@ -787,8 +822,11 @@ def _run_one_task(
         )
     except Exception as e:
         return TaskResult(
-            note=row.note, query=row.query, status=TaskStatus.FAILED,
-            output_dir=task_dir, duration_seconds=time.time() - start,
+            note=row.note,
+            query=row.query,
+            status=TaskStatus.FAILED,
+            output_dir=task_dir,
+            duration_seconds=time.time() - start,
             error=f"pipeline: {type(e).__name__}: {e}"[:200],
             extra={**base_extra, "n_attempts": len(hits)},
         )
@@ -797,13 +835,19 @@ def _run_one_task(
     duration = time.time() - start
     if n_success == 0:
         return TaskResult(
-            note=row.note, query=row.query, status=TaskStatus.NO_RESULTS,
-            output_dir=task_dir, duration_seconds=duration,
+            note=row.note,
+            query=row.query,
+            status=TaskStatus.NO_RESULTS,
+            output_dir=task_dir,
+            duration_seconds=duration,
             extra={**base_extra, "n_attempted": len(fetches)},
         )
     return TaskResult(
-        note=row.note, query=row.query, status=TaskStatus.SUCCESS,
-        output_dir=task_dir, duration_seconds=duration,
+        note=row.note,
+        query=row.query,
+        status=TaskStatus.SUCCESS,
+        output_dir=task_dir,
+        duration_seconds=duration,
         url_count=n_success,
         extra={**base_extra, "n_attempted": len(fetches)},
     )
@@ -832,36 +876,6 @@ def _capture_engine_audit(engine) -> dict[str, Any]:
         return {"key_used": None, "keys_tried": [], "keys_exhausted": []}
     return getter()
 
-
-def _pick_engine(label: str, engines: dict[str, SearchEngine]) -> SearchEngine:
-    """Resolve an engine label to a ready engine instance.
-
-    .. deprecated::
-        Inlined into :func:`_run_one_task` after the fallback-chain
-        rewrite. Kept for backwards compatibility with external
-        callers and the orchestrator's unit tests.
-    """
-    label = (label or "auto").lower()
-    if label in ("mmx", "auto"):
-        if "mmx" in engines:
-            return engines["mmx"]
-    if label in ("tavily", "auto"):
-        if "tavily" in engines:
-            return engines["tavily"]
-    # Fallback: any available engine
-    for e in engines.values():
-        return e
-    raise SearchEngineError("No search engines available")
-
-
-def _safe(s: str) -> str:
-    import re
-    return re.sub(r"[^A-Za-z0-9_-]+", "_", s).strip("_")[:20] or "x"
-
-
-# ---------------------------------------------------------------------------
-# Parallel dispatch with heartbeat
-# ---------------------------------------------------------------------------
 
 class Orchestrator:
     """One-stop driver for a full deep-dive run.
@@ -956,15 +970,20 @@ class Orchestrator:
         available = ", ".join(sorted(out.keys())) or "(none!)"
         # Probe the actual mmx executable path (if any) for the log.
         from deep_dive.crawler.engines.mmx import _resolve_mmx_path as _mmx_which
+
         mmx_path = _mmx_which() if "mmx" in out else None
         mmx_str = f" ({mmx_path})" if mmx_path else ""
         # Surface configured credential counts so the user can
         # verify multi-key setup at a glance.
         cred_strs = []
         if "tavily" in out:
-            cred_strs.append(f"tavily={out['tavily'].pool.total_count} key(s)")
+            _tav_pool = getattr(out["tavily"], "pool", None)
+            if _tav_pool is not None:
+                cred_strs.append(f"tavily={_tav_pool.total_count} key(s)")
         if "mmx" in out:
-            cred_strs.append(f"mmx={out['mmx'].pool.total_count} invocation(s)")
+            _mmx_pool = getattr(out["mmx"], "pool", None)
+            if _mmx_pool is not None:
+                cred_strs.append(f"mmx={_mmx_pool.total_count} invocation(s)")
         cred_summary = f" [{', '.join(cred_strs)}]" if cred_strs else ""
         safe_print(f"[ENGINE] available: {available}{mmx_str}{cred_summary}")
         return out
@@ -991,7 +1010,7 @@ class Orchestrator:
                 ``plan.english_search_terms`` and ``plan.target_sites``
                 instead of falling back to the hardcoded
                  matchers. When ``None``,
-                a warning is printed and legacy behaviour is used.
+                a warning is printed and the default behaviour is used.
 
         Returns:
             A :class:`CrawlResult` summarising the run. Also persists
@@ -1008,10 +1027,28 @@ class Orchestrator:
 
         # Run-id + topic-dir setup
         from datetime import datetime
+
         slug = _ascii_slug(query)[:40] or "search"
         suffix = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
         suffix = _ascii_slug(suffix)[:40] or "default"
         topic_dir = Path(config.output_dir) / f"{slug}__{suffix}"
+        # Windows MAX_PATH safety: if topic_dir + nested raw/task/file
+        # would push past 260 chars, fall back to a hash-based name.
+        # Affects Chinese-heavy queries where UTF-8 slug + timestamp +
+        # raw/ nesting exceeds the Win32 default path limit. 180 chars
+        # leaves ~80 chars for raw/ + task/ + filename on top of the
+        # topic_dir prefix.
+        if len(str(topic_dir)) > 180:
+            import hashlib as _hashlib
+
+            # MD5 used purely for non-cryptographic content addressing
+            # (collapsing long Chinese queries into a short filename slug
+            # when the topic-dir would exceed Windows MAX_PATH). The
+            # `usedforsecurity=False` flag (Python 3.9+) silences Bandit's
+            # B324 weak-hash warning and makes intent explicit. MD5 is
+            # acceptable for non-security content hashing.
+            _h = _hashlib.md5(query.encode("utf-8", "replace"), usedforsecurity=False).hexdigest()[:12]
+            topic_dir = Path(config.output_dir) / f"topic_{_h}__{suffix}"
         raw_dir = topic_dir / "raw"
         raw_dir.mkdir(parents=True, exist_ok=True)
         debug_dir = topic_dir / "debug" if config.debug else None
@@ -1026,6 +1063,7 @@ class Orchestrator:
         cookies_map = load_cookies()
         if cookies_map:
             from deep_dive.crawler.cookies import count_loaded
+
             n, s = count_loaded(cookies_map)
             safe_print(f"[COOKIE] loaded {n} cookies across {s} sites")
         else:
@@ -1034,7 +1072,7 @@ class Orchestrator:
         # Variants + matrix (plan-driven)
         dropped_tasks: list[str] = []
         if plan is None:
-            plan = auto_plan(query)
+            plan = auto_plan(query, config=config)
             safe_print(
                 "[INFO] No plan supplied; auto-generated a minimal plan from the query. "
                 "Pass an explicit plan for richer variants / target_sites."
@@ -1042,13 +1080,9 @@ class Orchestrator:
         variants = generate_variants_from_plan(plan)
         matrix, dropped_tasks = build_search_matrix_from_plan(plan, config=config)
         mode = "plan"
-        safe_print(
-            f"[MATRIX] {len(matrix)} tasks | concurrency={config.max_workers} | mode={mode}"
-        )
+        safe_print(f"[MATRIX] {len(matrix)} tasks | concurrency={config.max_workers} | mode={mode}")
         if dropped_tasks:
-            safe_print(
-                f"[MATRIX] {len(dropped_tasks)} tasks dropped due to cap={config.max_queries_for()}:"
-            )
+            safe_print(f"[MATRIX] {len(dropped_tasks)} tasks dropped due to cap={config.max_queries_for()}:")
             for label in dropped_tasks:
                 safe_print(f"  - dropped: {label}")
         for i, row in enumerate(matrix, 1):
@@ -1072,7 +1106,8 @@ class Orchestrator:
                                 for r in matrix
                             ],
                         },
-                        ensure_ascii=False, indent=2,
+                        ensure_ascii=False,
+                        indent=2,
                     ),
                     encoding="utf-8",
                 )
@@ -1081,7 +1116,10 @@ class Orchestrator:
 
         # Parallel dispatch
         task_results = self._dispatch_parallel(
-            matrix, base_dir=raw_dir, cookies_map=cookies_map, main_query=query,
+            matrix,
+            base_dir=raw_dir,
+            cookies_map=cookies_map,
+            main_query=query,
         )
 
         # Aggregate
@@ -1131,7 +1169,7 @@ class Orchestrator:
         try:
             summary_file.write_text(
                 json.dumps(summary, ensure_ascii=False, indent=2),
-                encoding="utf-8",
+                encoding="utf-8-sig",
             )
         except Exception as e:
             safe_print(f"[SUMMARY-ERR] write failed: {e}")
@@ -1164,7 +1202,8 @@ class Orchestrator:
         if report_path and report_path.exists():
             try:
                 append_capy_section(
-                    report_path=report_path, query=query,
+                    report_path=report_path,
+                    query=query,
                     task_results=task_results,
                     aggregated_meta=_all_meta(aggregated),
                 )
@@ -1228,7 +1267,14 @@ class Orchestrator:
 
         # Heartbeat thread
         stop_event = threading.Event()
-        def heartbeat_loop():
+
+        def heartbeat_loop() -> None:
+            """Background loop that prints ``[HEARTBEAT]`` progress.
+
+            Suppressed when a real event (task start, ``[OK]``,
+            ``[WARN]``) fired within the last interval — see
+            :func:`_mark_event`.
+            """
             while not stop_event.is_set():
                 stop_event.wait(DEFAULT_HEARTBEAT_INTERVAL_S)
                 if stop_event.is_set():
@@ -1248,16 +1294,23 @@ class Orchestrator:
             futures = []
             for i, row in enumerate(matrix):
                 task_out = base_dir / f"task_{i:02d}_{_ascii_slug(row.note)[:24]}"
-                self.heartbeat(f"  [{i+1}/{len(matrix)}] {row.note}")
+                self.heartbeat(f"  [{i + 1}/{len(matrix)}] {row.note}")
                 _mark_event()  # task start counts as activity
-                # Adjust exclude to be empty in normal path so legacy dir name matches
+                # Adjust exclude to be empty in normal path so the dir name matches
                 adj = MatrixRow(
-                    note=row.note, query=row.query, topk=row.topk, exclude=row.exclude,
+                    note=row.note,
+                    query=row.query,
+                    topk=row.topk,
+                    exclude=row.exclude,
                 )
                 fut = ex.submit(
-                    _run_one_task, adj,
-                    base_dir=task_out, engines=self.engines, config=self.config,
-                    cookies_map=cookies_map, main_query=main_query,
+                    _run_one_task,
+                    adj,
+                    base_dir=task_out,
+                    engines=self.engines,
+                    config=self.config,
+                    cookies_map=cookies_map,
+                    main_query=main_query,
                     fetcher_classes=self._fetcher_classes,
                 )
                 futures.append((fut, row))
@@ -1267,16 +1320,22 @@ class Orchestrator:
                     res = fut.result(timeout=self.config.task_timeout_s + 30)
                 except concurrent.futures.TimeoutError:
                     res = TaskResult(
-                        note=row.note, query=row.query, status=TaskStatus.TIMEOUT,
+                        note=row.note,
+                        query=row.query,
+                        status=TaskStatus.TIMEOUT,
                     )
                 except Exception as e:
                     res = TaskResult(
-                        note=row.note, query=row.query, status=TaskStatus.FAILED,
+                        note=row.note,
+                        query=row.query,
+                        status=TaskStatus.FAILED,
                         error=f"{type(e).__name__}: {e}"[:200],
                     )
                 results.append(res)
                 _inc()
-                self.heartbeat(f"  {TAG_OK if res.status == TaskStatus.SUCCESS else TAG_WARN} {row.note} ({res.status.value})")
+                self.heartbeat(
+                    f"  {TAG_OK if res.status == TaskStatus.SUCCESS else TAG_WARN} {row.note} ({res.status.value})"
+                )
                 _mark_event()  # task completion counts as activity
                 if time.time() - start > self.config.global_timeout_s:
                     self.heartbeat(f"{TAG_FIRE} global watchdog tripped, ending remaining tasks")
@@ -1289,6 +1348,7 @@ class Orchestrator:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _ascii_slug(s: str) -> str:
     """Filesystem-safe slug.
@@ -1303,8 +1363,9 @@ def _ascii_slug(s: str) -> str:
     filenames directly, so "黄金-走势" is a valid slug everywhere.
     """
     import re
-    s = re.sub(r'[\\/:*?"<>|]+', '-', s)
-    s = re.sub(r'\s+', '-', s.strip())
+
+    s = re.sub(r'[\\/:*?"<>|]+', "-", s)
+    s = re.sub(r"\s+", "-", s.strip())
     return s[:40] or "search"
 
 
@@ -1329,10 +1390,7 @@ def _task_to_json(r: TaskResult) -> dict[str, Any]:
     # behaviour, attempt count). Include it so the run can be audited.
     if r.extra:
         # Coerce Path objects to strings for JSON safety.
-        out["extra"] = {
-            k: (str(v) if hasattr(v, "__fspath__") else v)
-            for k, v in r.extra.items()
-        }
+        out["extra"] = {k: (str(v) if hasattr(v, "__fspath__") else v) for k, v in r.extra.items()}
     return out
 
 

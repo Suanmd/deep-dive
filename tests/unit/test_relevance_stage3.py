@@ -7,11 +7,7 @@ Covers ``_extract_primary_entity``, ``_primary_in_lead``, and the
 
 from __future__ import annotations
 
-import pytest
-
 from deep_dive.relevance import (
-    PRIMARY_LEAD_FRAC,
-    PRIMARY_MIN_LEN,
     _extract_primary_entity,
     _primary_in_lead,
     explain_relevance,
@@ -19,10 +15,10 @@ from deep_dive.relevance import (
 )
 from deep_dive.types import RelevanceVerdict
 
-
 # ---------------------------------------------------------------------------
 # _extract_primary_entity
 # ---------------------------------------------------------------------------
+
 
 class TestExtractPrimaryEntity:
     def test_first_long_chinese_entity(self):
@@ -46,10 +42,7 @@ class TestExtractPrimaryEntity:
 
     def test_picks_first_when_multiple_qualifying(self):
         # If query has multiple ≥3-char Chinese entities, the first one wins.
-        assert (
-            _extract_primary_entity("谷山志村猜想 朗兰兹纲领 怀尔斯")
-            == "谷山志村猜想"
-        )
+        assert _extract_primary_entity("谷山志村猜想 朗兰兹纲领 怀尔斯") == "谷山志村猜想"
 
     def test_custom_min_len(self):
         assert _extract_primary_entity("费马 怀尔斯", min_len=2) == "费马"
@@ -59,6 +52,7 @@ class TestExtractPrimaryEntity:
 # ---------------------------------------------------------------------------
 # _primary_in_lead
 # ---------------------------------------------------------------------------
+
 
 class TestPrimaryInLead:
     def test_primary_in_short_text(self):
@@ -107,13 +101,13 @@ class TestPrimaryInLead:
 # is_query_irrelevant (stage 3)
 # ---------------------------------------------------------------------------
 
+
 class TestIsQueryIrrelevantStage3:
     def test_relevant_flint_article(self):
         # Genuine FLT article: "费马大定理" appears in first 100 chars.
         text = (
             "费马大定理（Fermat's Last Theorem）是数论中最著名的未解之谜之一。"
-            "本文介绍其历史背景、证明思路与数学意义。"
-            + "更多内容" * 100
+            "本文介绍其历史背景、证明思路与数学意义。" + "更多内容" * 100
         )
         assert is_query_irrelevant(text, "费马大定理 证明 怀尔斯") is False
 
@@ -134,7 +128,8 @@ class TestIsQueryIrrelevantStage3:
         intro = (
             "在几何化朗兰兹猜想提出二十多年后，九位数学家第一次给出了"
             "这一宏大猜想的精确描述。这一最新成果或将成为数学界三十年"
-            "努力的巅峰。" * 5  # ~150 chars, lead
+            "努力的巅峰。"
+            * 5  # ~150 chars, lead
             + flt_mention  # appears around char 150+
             + "其余内容关于朗兰兹纲领。" * 50  # pad to ~3000+ chars
         )
@@ -145,9 +140,7 @@ class TestIsQueryIrrelevantStage3:
         later = flt_mention + "更多朗兰兹讨论。" * 30  # FLT mention near char 2500+
         full_text = intro + mid + later
 
-        assert is_query_irrelevant(
-            full_text, "费马大定理 证明 怀尔斯 谷山志村 朗兰兹纲领"
-        ) is True
+        assert is_query_irrelevant(full_text, "费马大定理 证明 怀尔斯 谷山志村 朗兰兹纲领") is True
 
     def test_opt_out_restores_v5_2_0_behaviour(self):
         # Same Langlands-article scenario, but with stage 3 disabled.
@@ -156,11 +149,14 @@ class TestIsQueryIrrelevantStage3:
         intro = "朗兰兹纲领" * 200  # 2000 chars of Langlands content
         full_text = intro + flt_mention
 
-        assert is_query_irrelevant(
-            full_text,
-            "费马大定理 证明 怀尔斯 谷山志村 朗兰兹纲领",
-            require_primary_in_lead=False,
-        ) is False
+        assert (
+            is_query_irrelevant(
+                full_text,
+                "费马大定理 证明 怀尔斯 谷山志村 朗兰兹纲领",
+                require_primary_in_lead=False,
+            )
+            is False
+        )
 
     def test_short_query_unchanged(self):
         # 2-char query can't have primary ≥3 chars → stage 3 vacuous pass.
@@ -175,6 +171,7 @@ class TestIsQueryIrrelevantStage3:
 # ---------------------------------------------------------------------------
 # explain_relevance (IRRELEVANT_LEAD verdict)
 # ---------------------------------------------------------------------------
+
 
 class TestExplainRelevanceStage3:
     def test_irrelevant_lead_verdict(self):

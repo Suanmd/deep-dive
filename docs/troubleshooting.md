@@ -273,7 +273,7 @@ stderr 看 `[MMX-OK]` / `[TAVILY-OK]` / `[MMX-QUOTA]` / `[AUTO-RESCUE]` 等诊�
 
 1. 跑 `deep-dive --query "test" --debug` 看 `debug/heartbeat.log`
 2. 跑 `pytest tests/ -v` 看是否环境问题
-3. 开 [GitHub Issue](https://github.com/your-org/deep-dive/issues) 附：
+3. 开 [GitHub Issue](https://github.com/Suanmd/deep-dive/issues) 附：
    - deep-dive 版本
    - 完整 stderr
    - `summary.json`

@@ -16,17 +16,13 @@ Resolution order (highest priority first):
 
 from __future__ import annotations
 
+import contextlib
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-try:
-    import yaml  # type: ignore[import-untyped]
-    _HAS_YAML = True
-except ImportError:  # pragma: no cover — yaml is optional
-    _HAS_YAML = False
-
+import yaml
 
 from .constants import (
     DEFAULT_GLOBAL_TIMEOUT_S,
@@ -38,9 +34,10 @@ from .constants import (
     MIN_CHARS_DEFAULT,
     QUERY_CORE_ENTITY_MIN_HITRATE,
     QUERY_RELEVANCE_MIN_HITRATE,
+)
+from .constants import (
     __version__ as PKG_VERSION,
 )
-
 
 # ---------------------------------------------------------------------------
 # Built-in defaults (lowest priority)
@@ -64,9 +61,9 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "core_entity_min_hitrate": QUERY_CORE_ENTITY_MIN_HITRATE,
     },
     "depth_config": {
-        "quick":  {"topk": 14, "max_queries": 4},
+        "quick": {"topk": 14, "max_queries": 4},
         "normal": {"topk": 18, "max_queries": 8},
-        "full":   {"topk": 22, "max_queries": 14},
+        "full": {"topk": 22, "max_queries": 14},
     },
     "log_level": "INFO",
     "debug": False,
@@ -76,6 +73,7 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Config dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass(slots=True)
 class Config:
@@ -101,9 +99,9 @@ class Config:
     core_entity_min_hitrate: float = QUERY_CORE_ENTITY_MIN_HITRATE
     depth_config: dict[str, dict[str, int]] = field(
         default_factory=lambda: {
-            "quick":  {"topk": 14, "max_queries": 4},
+            "quick": {"topk": 14, "max_queries": 4},
             "normal": {"topk": 18, "max_queries": 8},
-            "full":   {"topk": 22, "max_queries": 14},
+            "full": {"topk": 22, "max_queries": 14},
         }
     )
     log_level: str = "INFO"
@@ -194,6 +192,17 @@ class Config:
     # Serialization
     # ------------------------------------------------------------------
     def to_dict(self, *, redact_secrets: bool = True) -> dict[str, Any]:
+        """Serialize this config to a dict (optionally redacting secrets).
+
+        Args:
+            redact_secrets: if True (default), replace ``tavily_api_key``,
+                ``tavily_api_key_backup``, and ``tavily_keys`` with
+                ``***REDACTED***`` / placeholder counts. Pass False to
+                keep the real values (e.g. for local debugging).
+
+        Returns:
+            A JSON-serializable dict representation of this config.
+        """
         d = {
             "version": PKG_VERSION,
             "output_dir": str(self.output_dir),
@@ -217,12 +226,14 @@ class Config:
                 if (redact_secrets and self.tavily_keys)
                 else list(self.tavily_keys)
             ),
-            "tavily_api_key": "***REDACTED***" if (redact_secrets and self.tavily_api_key) else self.tavily_api_key,
-            "tavily_api_key_backup": "***REDACTED***" if (redact_secrets and self.tavily_api_key_backup) else self.tavily_api_key_backup,
+            "tavily_api_key": "***REDACTED***"
+            if (redact_secrets and self.tavily_api_key)
+            else self.tavily_api_key,
+            "tavily_api_key_backup": "***REDACTED***"
+            if (redact_secrets and self.tavily_api_key_backup)
+            else self.tavily_api_key_backup,
             "mmx_invocations": (
-                "***REDACTED***"
-                if (redact_secrets and self.mmx_invocations)
-                else list(self.mmx_invocations)
+                "***REDACTED***" if (redact_secrets and self.mmx_invocations) else list(self.mmx_invocations)
             ),
         }
         return d
@@ -231,6 +242,7 @@ class Config:
 # ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
+
 
 def _find_yaml_file() -> Path | None:
     """Locate the user YAML config, if any.
@@ -256,8 +268,6 @@ def _find_yaml_file() -> Path | None:
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    if not _HAS_YAML:
-        return {}
     try:
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
@@ -270,13 +280,12 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 def _apply_yaml(cfg: Config, data: dict[str, Any]) -> None:
     """Apply YAML keys onto a Config (best-effort, no exceptions)."""
+
     def _set(name: str, target_type: type) -> None:
         if name not in data:
             return
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             setattr(cfg, name, target_type(data[name]))
-        except (TypeError, ValueError):
-            pass
 
     _set("depth", str)
     _set("lang", str)
@@ -295,15 +304,11 @@ def _apply_yaml(cfg: Config, data: dict[str, Any]) -> None:
     rel = data.get("relevance")
     if isinstance(rel, dict):
         if "min_hitrate" in rel:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 cfg.relevance_min_hitrate = float(rel["min_hitrate"])
-            except (TypeError, ValueError):
-                pass
         if "core_entity_min_hitrate" in rel:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 cfg.core_entity_min_hitrate = float(rel["core_entity_min_hitrate"])
-            except (TypeError, ValueError):
-                pass
     dc = data.get("depth_config")
     if isinstance(dc, dict):
         merged = dict(cfg.depth_config)
@@ -312,18 +317,14 @@ def _apply_yaml(cfg: Config, data: dict[str, Any]) -> None:
                 continue
             merged.setdefault(depth, {})
             for k, v in vals.items():
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     merged[depth][k] = int(v)
-                except (TypeError, ValueError):
-                    pass
         cfg.depth_config = merged
     # multi-key support
     if isinstance(data.get("tavily_keys"), list):
         cfg.tavily_keys = [str(k) for k in data["tavily_keys"] if k]
     if isinstance(data.get("mmx_invocations"), list):
-        cfg.mmx_invocations = [
-            dict(inv) for inv in data["mmx_invocations"] if isinstance(inv, dict)
-        ]
+        cfg.mmx_invocations = [dict(inv) for inv in data["mmx_invocations"] if isinstance(inv, dict)]
 
 
 def _apply_env(cfg: Config) -> None:

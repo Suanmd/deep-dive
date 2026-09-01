@@ -27,7 +27,7 @@ import concurrent.futures
 import os
 from typing import Any
 
-from deep_dive.constants import TAG_TAVILY_ERR, TAG_TAVILY_FALLBACK, TAG_TAVILY_OK
+from deep_dive.constants import TAG_TAVILY_ERR, TAG_TAVILY_OK
 from deep_dive.logging_setup import safe_print
 from deep_dive.types import SearchHit
 
@@ -44,6 +44,7 @@ from .base import (
 
 try:
     from tavily import TavilyClient
+
     _HAS_TAVILY = True
 except ImportError:  # pragma: no cover — tavily-python is a hard dep
     _HAS_TAVILY = False
@@ -116,6 +117,7 @@ def _classify_error(message: str) -> type[SearchEngineError]:
 # Engine
 # ---------------------------------------------------------------------------
 
+
 class TavilyEngine(MultiKeyEngine):
     """Tavily-backed search engine with N-key auto rotation."""
 
@@ -139,7 +141,7 @@ class TavilyEngine(MultiKeyEngine):
             api_key_backup: legacy backup key. Kept for backwards compat;
                 equivalent to ``keys=[api_key, api_key_backup]``.
             keys: list of API keys (NEW). Each key becomes one
-                credential in the pool, named ``KEY1``, ``KEY2``, etc.
+                credential in the pool, named ``KEY1``, ``KEY2``, ..., ``KEYN`` (supports arbitrary N keys, not limited to 2)
             pool: explicit credential pool. If given, all other
                 arguments are ignored.
             timeout_s: total per-search budget across all keys.
@@ -255,31 +257,20 @@ class TavilyEngine(MultiKeyEngine):
         if not _HAS_TAVILY:
             # Library missing — no point rotating. Surface as permanent
             # error so the user sees a clear message.
-            raise SearchEngineError(
-                f"{self.name}: tavily-python SDK is not installed"
-            )
+            raise SearchEngineError(f"{self.name}: tavily-python SDK is not installed")
         if not cred.key:
             # Credential missing a key — treat as auth error so it
             # rotates (next cred may have a valid key).
-            raise SearchEngineAuthError(
-                f"{self.name}: credential {cred.name!r} has no API key"
-            )
+            raise SearchEngineAuthError(f"{self.name}: credential {cred.name!r} has no API key")
 
         try:
             client = TavilyClient(api_key=cred.key)
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-                fut = ex.submit(
-                    client.search, query=query, max_results=topk
-                )
+                fut = ex.submit(client.search, query=query, max_results=topk)
                 res = fut.result(timeout=_PER_KEY_TIMEOUT_S)
         except concurrent.futures.TimeoutError as e:
-            safe_print(
-                f"{TAG_TAVILY_ERR} {cred.name} timeout after {_PER_KEY_TIMEOUT_S}s: "
-                f"'{query[:30]}'"
-            )
-            raise SearchEngineTimeoutError(
-                f"{self.name}: {cred.name} timeout"
-            ) from e
+            safe_print(f"{TAG_TAVILY_ERR} {cred.name} timeout after {_PER_KEY_TIMEOUT_S}s: '{query[:30]}'")
+            raise SearchEngineTimeoutError(f"{self.name}: {cred.name} timeout") from e
         except Exception as e:
             # Classify the error and raise the matching typed exception.
             # MultiKeyEngine will catch retryable types and rotate.

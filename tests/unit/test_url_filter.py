@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from deep_dive.constants import LOWQ_DOMAINS, SPAM_DOMAINS
-from deep_dive.filters.url_filter import FilterStats, smart_filter_urls
+from deep_dive.filters.url_filter import smart_filter_urls
 
 
 class TestSmartFilterBasic:
@@ -53,9 +53,7 @@ class TestSpamDomainFilter:
         assert result == []
 
     def test_multiple_spam_domains_all_dropped(self):
-        urls = [
-            f"https://{d}/p" for d in list(SPAM_DOMAINS)[:3]
-        ]
+        urls = [f"https://{d}/p" for d in list(SPAM_DOMAINS)[:3]]
         result = smart_filter_urls(urls)
         assert result == []
 

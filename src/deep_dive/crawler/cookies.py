@@ -3,7 +3,7 @@
 Reads the optional ``config/cookies.json`` and returns the cookies that
 apply to a given URL.
 
-File format (unchanged from the legacy project for compatibility)::
+File format (stable across versions for cookie portability)::
 
     {
       "zhihu": {
@@ -143,12 +143,14 @@ def match_cookies_to_url(
             if not cdom:
                 continue
             if cdom in host or host.endswith(cdom):
-                matched.append({
-                    "name": c.name,
-                    "value": c.value,
-                    "domain": c.domain or host,
-                    "path": c.path,
-                })
+                matched.append(
+                    {
+                        "name": c.name,
+                        "value": c.value,
+                        "domain": c.domain or host,
+                        "path": c.path,
+                    }
+                )
     return matched
 
 
@@ -158,8 +160,8 @@ def count_loaded(cookies_map: Mapping[str, Iterable[Cookie]]) -> tuple[int, int]
     Returns:
         (n_cookies, n_sites_with_cookies)
     """
-    n_cookies = sum(len(v) for v in cookies_map.values())
-    n_sites = sum(1 for v in cookies_map.values() if v)
+    n_cookies = sum(len(v) for v in cookies_map.values() if isinstance(v, list))
+    n_sites = sum(1 for v in cookies_map.values() if bool(v))
     return n_cookies, n_sites
 
 

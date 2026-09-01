@@ -58,7 +58,7 @@ deep-dive --query "kubernetes" --debug
 --output / -o PATH       输出根目录（默认 ./tmp/deep-dive）
 --run-id TEXT            自定义 run id（强制 ASCII slug）
 --max-workers INT        并发任务数（默认 2）
---min-chars INT          低质页阈值（默认 500）
+--min-chars INT          低质页阈值（默认 1500）
 --no-report              跳过 report.md
 --no-capy                跳过卡皮观点 section
 --debug                  落盘 <topic_dir>/debug/

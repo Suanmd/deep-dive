@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from deep_dive.aggregator import Aggregator
-from deep_dive.types import FetchResult, FetchStatus, TaskResult, TaskStatus
+from deep_dive.types import TaskResult, TaskStatus
 
 
 def _write_metadata(path: Path, entries: list[dict]) -> None:
@@ -25,12 +25,20 @@ class TestAggregatorBasic:
     def test_aggregates_single_task(self, tmp_raw_dir):
         task_dir = tmp_raw_dir / "task_00"
         task_dir.mkdir()
-        _write_metadata(task_dir / "metadata.json", [
-            {"url": "https://example.com/a", "title": "A", "status": "success", "chars": 100,
-             "txt_file": "a.txt", "source_task": "task_00"},
-        ])
-        tr = TaskResult(note="task_00", query="test", status=TaskStatus.SUCCESS,
-                        output_dir=task_dir)
+        _write_metadata(
+            task_dir / "metadata.json",
+            [
+                {
+                    "url": "https://example.com/a",
+                    "title": "A",
+                    "status": "success",
+                    "chars": 100,
+                    "txt_file": "a.txt",
+                    "source_task": "task_00",
+                },
+            ],
+        )
+        tr = TaskResult(note="task_00", query="test", status=TaskStatus.SUCCESS, output_dir=task_dir)
         agg = Aggregator()
         result = agg.aggregate([tr], tmp_raw_dir)
         assert result.total_urls == 1
@@ -41,11 +49,13 @@ class TestAggregatorBasic:
         # Even if metadata.json exists for a failed task, it's skipped
         task_dir = tmp_raw_dir / "task_00"
         task_dir.mkdir()
-        _write_metadata(task_dir / "metadata.json", [
-            {"url": "https://example.com/a", "status": "success"},
-        ])
-        tr = TaskResult(note="task_00", query="test", status=TaskStatus.FAILED,
-                        output_dir=task_dir)
+        _write_metadata(
+            task_dir / "metadata.json",
+            [
+                {"url": "https://example.com/a", "status": "success"},
+            ],
+        )
+        tr = TaskResult(note="task_00", query="test", status=TaskStatus.FAILED, output_dir=task_dir)
         agg = Aggregator()
         result = agg.aggregate([tr], tmp_raw_dir)
         assert result.total_urls == 0
@@ -55,11 +65,13 @@ class TestAggregatorBasic:
         aggregator rather than being silently dropped."""
         task_dir = tmp_raw_dir / "task_00"
         task_dir.mkdir()
-        _write_metadata(task_dir / "metadata.json", [
-            {"url": "https://example.com/a", "status": "success"},
-        ])
-        tr = TaskResult(note="task_00", query="test", status=TaskStatus.QUOTA_EXCEEDED,
-                        output_dir=task_dir)
+        _write_metadata(
+            task_dir / "metadata.json",
+            [
+                {"url": "https://example.com/a", "status": "success"},
+            ],
+        )
+        tr = TaskResult(note="task_00", query="test", status=TaskStatus.QUOTA_EXCEEDED, output_dir=task_dir)
         agg = Aggregator()
         result = agg.aggregate([tr], tmp_raw_dir)
         assert result.total_urls == 1
@@ -69,13 +81,20 @@ class TestCrossTaskDedup:
     def test_same_url_in_two_tasks(self, tmp_raw_dir):
         t1 = tmp_raw_dir / "task_00"
         t2 = tmp_raw_dir / "task_01"
-        t1.mkdir(); t2.mkdir()
-        _write_metadata(t1 / "metadata.json", [
-            {"url": "https://example.com/a", "status": "success", "title": "T1"},
-        ])
-        _write_metadata(t2 / "metadata.json", [
-            {"url": "https://example.com/a", "status": "success", "title": "T2"},
-        ])
+        t1.mkdir()
+        t2.mkdir()
+        _write_metadata(
+            t1 / "metadata.json",
+            [
+                {"url": "https://example.com/a", "status": "success", "title": "T1"},
+            ],
+        )
+        _write_metadata(
+            t2 / "metadata.json",
+            [
+                {"url": "https://example.com/a", "status": "success", "title": "T2"},
+            ],
+        )
         results = [
             TaskResult(note="t1", query="test", status=TaskStatus.SUCCESS, output_dir=t1),
             TaskResult(note="t2", query="test", status=TaskStatus.SUCCESS, output_dir=t2),
@@ -92,13 +111,20 @@ class TestCrossTaskDedup:
     def test_prefers_metadata_with_title(self, tmp_raw_dir):
         t1 = tmp_raw_dir / "task_00"
         t2 = tmp_raw_dir / "task_01"
-        t1.mkdir(); t2.mkdir()
-        _write_metadata(t1 / "metadata.json", [
-            {"url": "https://example.com/a", "status": "success", "title": ""},
-        ])
-        _write_metadata(t2 / "metadata.json", [
-            {"url": "https://example.com/a", "status": "success", "title": "Real Title"},
-        ])
+        t1.mkdir()
+        t2.mkdir()
+        _write_metadata(
+            t1 / "metadata.json",
+            [
+                {"url": "https://example.com/a", "status": "success", "title": ""},
+            ],
+        )
+        _write_metadata(
+            t2 / "metadata.json",
+            [
+                {"url": "https://example.com/a", "status": "success", "title": "Real Title"},
+            ],
+        )
         results = [
             TaskResult(note="t1", query="test", status=TaskStatus.SUCCESS, output_dir=t1),
             TaskResult(note="t2", query="test", status=TaskStatus.SUCCESS, output_dir=t2),
@@ -141,9 +167,13 @@ class TestMetadataParsing:
         (engine, fallback_used, n_attempted, ...) so downstream tooling
         can audit the fallback chain without re-reading stderr."""
         from deep_dive.orchestrator import _task_to_json
+
         tr = TaskResult(
-            note="test", query="q", status=TaskStatus.SUCCESS,
-            url_count=3, duration_seconds=1.5,
+            note="test",
+            query="q",
+            status=TaskStatus.SUCCESS,
+            url_count=3,
+            duration_seconds=1.5,
             extra={"engine": "mmx", "fallback_used": True, "fallback_status": "ok", "n_attempted": 5},
         )
         data = _task_to_json(tr)
@@ -157,6 +187,7 @@ class TestMetadataParsing:
         """When a task has no extras (e.g. failed before engine dispatch),
         the summary should NOT include an empty 'extra' field."""
         from deep_dive.orchestrator import _task_to_json
+
         tr = TaskResult(note="test", query="q", status=TaskStatus.FAILED)
         data = _task_to_json(tr)
         assert "extra" not in data

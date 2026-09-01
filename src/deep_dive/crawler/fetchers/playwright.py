@@ -1,7 +1,7 @@
 """Playwright-based fetcher.
 
 Implements the legacy ``fetch_page`` behaviour (used by the previous
-deep-search crawler) inside its own class so it can be tested in
+deep-dive crawler) inside its own class so it can be tested in
 isolation and swapped out for alternative implementations.
 
 Notes
@@ -23,10 +23,10 @@ extraction is the pipeline's responsibility.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import random
-import re
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 
 from deep_dive.constants import USER_AGENTS, VIEWPORTS
 from deep_dive.logging_setup import safe_print
@@ -34,7 +34,8 @@ from deep_dive.logging_setup import safe_print
 from .base import Fetcher, FetcherError
 
 try:
-    from playwright.async_api import Browser, async_playwright
+    from playwright.async_api import Browser, Playwright, async_playwright
+
     _HAS_PLAYWRIGHT = True
 except ImportError:  # pragma: no cover — playwright is a hard dep
     _HAS_PLAYWRIGHT = False
@@ -71,21 +72,25 @@ class PlaywrightFetcher(Fetcher):
         super().__init__(timeout_s=timeout_s)
         self.headless = headless
         self.warmup_for_baidu = warmup_for_baidu
-        self.extra_browser_args = list(extra_browser_args or [
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-extensions",
-            "--disable-popup-blocking",
-        ])
-        self._pw = None
+        self.extra_browser_args = list(
+            extra_browser_args
+            or [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-extensions",
+                "--disable-popup-blocking",
+            ]
+        )
+        self._pw: Playwright | None = None
         self._browser: Browser | None = None
 
-    async def __aenter__(self) -> "PlaywrightFetcher":
+    async def __aenter__(self) -> PlaywrightFetcher:
         if not _HAS_PLAYWRIGHT:
             raise FetcherError("playwright not installed")
-        self._pw = await async_playwright().start()
-        self._browser = await self._pw.chromium.launch(
+        pw = await async_playwright().start()
+        self._pw = pw
+        self._browser = await pw.chromium.launch(
             headless=self.headless,
             args=self.extra_browser_args,
         )
@@ -109,12 +114,24 @@ class PlaywrightFetcher(Fetcher):
         warmup_url: str | None = None,
         do_warmup: bool = False,
     ) -> tuple[str, str]:
+        """Async Playwright fetch with warm-up + cookie + lazy-scroll.
+
+        Args:
+            url: target URL.
+            cookies: optional cookies to inject.
+            warmup_url: optional explicit warm-up URL (overrides Baidu default).
+            do_warmup: if True and ``warmup_for_baidu`` is set, visit the
+                Baidu warm-up URL first to dodge first-visit CAPTCHAs.
+
+        Returns:
+            ``(html, title)`` tuple.
+        """
         if self._browser is None:
             raise FetcherError("PlaywrightFetcher must be used as an async context manager")
 
         page = await self._browser.new_page(
             user_agent=random.choice(USER_AGENTS),
-            viewport=random.choice(VIEWPORTS),
+            viewport=cast("Any", random.choice(VIEWPORTS)),
             ignore_https_errors=True,
         )
         try:
@@ -128,16 +145,14 @@ class PlaywrightFetcher(Fetcher):
                 try:
                     await page.goto(warm, wait_until="domcontentloaded", timeout=20000)
                     await asyncio.sleep(random.uniform(1.0, 2.0))
-                    await page.evaluate(
-                        "document.querySelector('input#kw')?.focus();"
-                    )
+                    await page.evaluate("document.querySelector('input#kw')?.focus();")
                     await asyncio.sleep(random.uniform(0.4, 0.8))
                 except Exception:
                     pass  # warm-up failures never abort the main fetch
 
             if cookies:
                 try:
-                    await page.context.add_cookies(cookies)
+                    await page.context.add_cookies(cast("Any", cookies))
                 except Exception as e:
                     safe_print(f"[COOKIE-WARN] inject failed: {e}")
 
@@ -155,10 +170,8 @@ class PlaywrightFetcher(Fetcher):
                 pass
 
             # Random click — anti-fingerprint
-            try:
+            with contextlib.suppress(Exception):
                 await page.mouse.click(random.randint(150, 600), random.randint(150, 600))
-            except Exception:
-                pass
 
             # ``page.content()`` can race against navigation; retry up to 3x.
             content: str | None = None
@@ -173,10 +186,8 @@ class PlaywrightFetcher(Fetcher):
 
             return content or "", (title or "").strip()
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 await page.close()
-            except Exception:
-                pass
 
     # Sync fallback delegates to async via a fresh event loop.
     def fetch(
@@ -186,6 +197,11 @@ class PlaywrightFetcher(Fetcher):
         cookies: list[dict[str, str]] | None = None,
         warmup_url: str | None = None,
     ) -> tuple[str, str]:
+        """Sync wrapper — spins up a fresh event loop and delegates to
+        :meth:`afetch`. Use ``async with PlaywrightFetcher()`` directly
+        in async code instead (avoids the loop-spinup overhead).
+        """
+
         async def _run():
             async with PlaywrightFetcher(
                 timeout_s=self.timeout_s,
@@ -200,10 +216,8 @@ class PlaywrightFetcher(Fetcher):
             asyncio.set_event_loop(loop)
             return loop.run_until_complete(_run())
         finally:
-            try:
-                loop.close()  # type: ignore[possibly-undefined]
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                loop.close()
 
 
 __all__ = ["PlaywrightFetcher"]

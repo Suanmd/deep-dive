@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from deep_dive.crawler.extraction import (
     extract_main_text,
     extract_title,
@@ -69,24 +67,32 @@ class TestLooksLikeBlockPage:
         assert looks_like_block_page("hi") is True
 
     def test_long_text_not_block(self):
-        assert looks_like_block_page(
-            "This is a perfectly normal article that doesn't contain any "
-            "challenge keywords. It has enough content to be considered real."
-        ) is False
+        assert (
+            looks_like_block_page(
+                "This is a perfectly normal article that doesn't contain any "
+                "challenge keywords. It has enough content to be considered real."
+            )
+            is False
+        )
 
     def test_captcha_phrase_detected(self):
-        assert looks_like_block_page(
-            "Some prefix text. " + "Please wait while we verify you are human. " * 5
-        ) is True
+        assert (
+            looks_like_block_page("Some prefix text. " + "Please wait while we verify you are human. " * 5)
+            is True
+        )
 
     def test_cloudflare_keyword_detected(self):
-        assert looks_like_block_page(
-            "Checking your browser before accessing example.com. "
-            "This process is automatic. Your browser will redirect shortly. "
-            "DDoS protection by Cloudflare. " * 3
-        ) is True
+        assert (
+            looks_like_block_page(
+                "Checking your browser before accessing example.com. "
+                "This process is automatic. Your browser will redirect shortly. "
+                "DDoS protection by Cloudflare. " * 3
+            )
+            is True
+        )
 
     def test_chinese_block_keyword_detected(self):
-        assert looks_like_block_page(
-            "系统检测到您的访问异常，请进行验证以继续访问。" + "请进行验证 " * 10
-        ) is True
+        assert (
+            looks_like_block_page("系统检测到您的访问异常，请进行验证以继续访问。" + "请进行验证 " * 10)
+            is True
+        )

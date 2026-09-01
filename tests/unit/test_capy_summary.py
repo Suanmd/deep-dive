@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
 from deep_dive.reporting.capy_summary import (
     _extract_content_views,
     append_capy_section,
@@ -13,8 +11,10 @@ from deep_dive.types import FetchResult, FetchStatus, TaskResult, TaskStatus
 
 def _success_result(url: str, title: str = "", chars: int = 1000) -> FetchResult:
     return FetchResult(
-        url=url, status=FetchStatus.SUCCESS,
-        title=title, chars=chars,
+        url=url,
+        status=FetchStatus.SUCCESS,
+        title=title,
+        chars=chars,
         source_task="task_00",
     )
 
@@ -107,6 +107,7 @@ class TestAppendCapySection:
             task_results=results,
             aggregated_meta=[],
         )
+        _ = ok  # silence F841; return value not asserted (capy itself asserts via content)
         content = report.read_text(encoding="utf-8")
         assert "[QUOTA]" in content
 
@@ -119,8 +120,10 @@ class TestAppendCapySection:
         results = [TaskResult(note="t", query="test", status=TaskStatus.SUCCESS)]
         aggregated = [_success_result("https://example.com/a", chars=1500)]
         append_capy_section(
-            report_path=report, query="test",
-            task_results=results, aggregated_meta=aggregated,
+            report_path=report,
+            query="test",
+            task_results=results,
+            aggregated_meta=aggregated,
         )
         content = report.read_text(encoding="utf-8")
         # Old section content should be gone
@@ -140,14 +143,17 @@ class TestAppendCapySection:
 
 class TestAppendCapySection_LegacyParity:
     def test_does_not_crash_on_zero_chars(self, tmp_path):
-        """Regression: legacy code had a \"千位分隔符\" bug — verify our impl doesn't crash."""
+        """Regression: legacy code crashed on a FetchResult with chars=0;
+        verify our impl handles the zero-char case gracefully."""
         report = tmp_path / "report.md"
         report.write_text("# Report\n", encoding="utf-8")
         aggregated = [_success_result("https://example.com/a", chars=0)]
         results = [TaskResult(note="t", query="test", status=TaskStatus.SUCCESS)]
         ok = append_capy_section(
-            report_path=report, query="test",
-            task_results=results, aggregated_meta=aggregated,
+            report_path=report,
+            query="test",
+            task_results=results,
+            aggregated_meta=aggregated,
         )
         # Should succeed despite chars=0
         assert ok is True
@@ -162,26 +168,30 @@ class TestFailedTaskListing:
         report.write_text("# Report\n\nContent here.\n", encoding="utf-8")
         results = [
             TaskResult(
-                note="中文原始", query="算电协同",
+                note="中文原始",
+                query="算电协同",
                 status=TaskStatus.SUCCESS,
             ),
             TaskResult(
-                note="中文评论/反对视角", query="算电协同",
+                note="中文评论/反对视角",
+                query="算电协同",
                 status=TaskStatus.QUOTA_EXCEEDED,
                 error="mmx quota exhausted",
                 extra={"engine": "mmx", "degraded_to": "tavily"},
             ),
             TaskResult(
-                note="站点定向:stackoverflow.com", query="算电协同",
+                note="站点定向:stackoverflow.com",
+                query="算电协同",
                 status=TaskStatus.NO_RESULTS,
-                extra={"engine": "mmx", "site_filtered_out": True,
-                       "target_site": "stackoverflow.com"},
+                extra={"engine": "mmx", "site_filtered_out": True, "target_site": "stackoverflow.com"},
             ),
         ]
         aggregated = [_success_result("https://example.com/a", chars=1500)]
         ok = append_capy_section(
-            report_path=report, query="算电协同",
-            task_results=results, aggregated_meta=aggregated,
+            report_path=report,
+            query="算电协同",
+            task_results=results,
+            aggregated_meta=aggregated,
         )
         assert ok is True
         content = report.read_text(encoding="utf-8")
@@ -203,8 +213,10 @@ class TestFailedTaskListing:
         ]
         aggregated = [_success_result("https://example.com/a", chars=1500)]
         append_capy_section(
-            report_path=report, query="x",
-            task_results=results, aggregated_meta=aggregated,
+            report_path=report,
+            query="x",
+            task_results=results,
+            aggregated_meta=aggregated,
         )
         content = report.read_text(encoding="utf-8")
         # No failures → no failure-listing heading.

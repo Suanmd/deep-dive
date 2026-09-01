@@ -8,13 +8,11 @@ so the ``deep_dive`` package resolves to the source version
 from __future__ import annotations
 
 import json
-import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Path setup — make src/ importable without installing the package.
@@ -37,6 +35,7 @@ sys.path.insert(0, str(_SRC))
 # ---------------------------------------------------------------------------
 # Environment isolation
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _clean_deep_dive_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
@@ -63,6 +62,7 @@ def _clean_deep_dive_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 # ---------------------------------------------------------------------------
 # Filesystem fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def tmp_output_dir(tmp_path: Path) -> Path:

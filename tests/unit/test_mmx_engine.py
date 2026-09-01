@@ -25,23 +25,22 @@ import pytest
 from deep_dive.crawler.engines.base import (
     SearchEngineError,
     SearchEngineQuotaError,
-    SearchEngineTimeoutError,
 )
 from deep_dive.crawler.engines.mmx import (
     MMXEngine,
-    _MMX_PATH_CACHE,
     _resolve_mmx_path,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixture: reset the module-level cache between tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _reset_mmx_cache():
     """Reset the path-resolution cache before/after each test."""
     import deep_dive.crawler.engines.mmx as mod
+
     mod._MMX_PATH_CACHE = False
     yield
     mod._MMX_PATH_CACHE = False
@@ -60,6 +59,7 @@ def _make_run_result(*, returncode: int = 0, stdout: str = '{"organic": []}', st
 # _resolve_mmx_path
 # ---------------------------------------------------------------------------
 
+
 class TestResolveMmxPath:
     def test_resolves_when_mmx_on_path(self, monkeypatch):
         """shutil.which returns a path → cached and returned."""
@@ -76,9 +76,11 @@ class TestResolveMmxPath:
     def test_caches_result_across_calls(self, monkeypatch):
         """Second call must NOT re-invoke shutil.which."""
         counter = {"n": 0}
+
         def fake_which(_):
             counter["n"] += 1
             return "/usr/bin/mmx"
+
         monkeypatch.setattr("deep_dive.crawler.engines.mmx.shutil.which", fake_which)
         _resolve_mmx_path()
         _resolve_mmx_path()
@@ -88,9 +90,11 @@ class TestResolveMmxPath:
     def test_caches_negative_result(self, monkeypatch):
         """shutil.which → None is also cached (don't re-check on every call)."""
         counter = {"n": 0}
+
         def fake_which(_):
             counter["n"] += 1
             return None
+
         monkeypatch.setattr("deep_dive.crawler.engines.mmx.shutil.which", fake_which)
         _resolve_mmx_path()
         _resolve_mmx_path()
@@ -110,7 +114,7 @@ class TestResolveMmxPath:
     def test_no_uncached_attribute_attribute_error(self, monkeypatch):
         """REGRESSION: ``_resolve_mmx_path()`` must NOT reference
         ``_resolve_mmx_path._uncached`` (which never existed). A
-        previous implementation called ``_resolve_mmx_path._uncached()``
+        prior implementation called ``_resolve_mmx_path._uncached()``
         on first invocation, raising::
 
             AttributeError: 'function' object has no attribute '_uncached'
@@ -131,6 +135,7 @@ class TestResolveMmxPath:
 # MMXEngine._raw_search — full behaviour
 # ---------------------------------------------------------------------------
 
+
 class TestMMXEngineSearch:
     def test_search_raises_error_when_mmx_missing(self, monkeypatch):
         """No ``mmx`` binary on PATH (single-credential pool) →
@@ -146,7 +151,9 @@ class TestMMXEngineSearch:
 
     def test_search_parses_valid_json(self, monkeypatch):
         """Normal mmx JSON response → list of SearchHit."""
-        valid_json = '{"organic": [{"link": "https://a.com", "title": "A"}, {"link": "https://b.com", "title": "B"}]}'
+        valid_json = (
+            '{"organic": [{"link": "https://a.com", "title": "A"}, {"link": "https://b.com", "title": "B"}]}'
+        )
         monkeypatch.setattr("deep_dive.crawler.engines.mmx._resolve_mmx_path", lambda: "/usr/bin/mmx")
         monkeypatch.setattr(
             "deep_dive.crawler.engines.mmx.subprocess.run",
@@ -163,6 +170,7 @@ class TestMMXEngineSearch:
         """5 hits available, topk=3 → only 3 returned."""
         items = [{"link": f"https://{i}.com", "title": str(i)} for i in range(5)]
         import json as _json
+
         valid_json = _json.dumps({"organic": items})
         monkeypatch.setattr("deep_dive.crawler.engines.mmx._resolve_mmx_path", lambda: "/usr/bin/mmx")
         monkeypatch.setattr(
@@ -238,12 +246,11 @@ class TestMMXEngineSearch:
         propagates.
         """
         import subprocess
+
         monkeypatch.setattr("deep_dive.crawler.engines.mmx._resolve_mmx_path", lambda: "/usr/bin/mmx")
         monkeypatch.setattr(
             "deep_dive.crawler.engines.mmx.subprocess.run",
-            lambda *a, **kw: (_ for _ in ()).throw(
-                subprocess.TimeoutExpired(cmd=["mmx"], timeout=5)
-            ),
+            lambda *a, **kw: (_ for _ in ()).throw(subprocess.TimeoutExpired(cmd=["mmx"], timeout=5)),
         )
         engine = MMXEngine(timeout_s=2.0)
         with pytest.raises(SearchEngineQuotaError):

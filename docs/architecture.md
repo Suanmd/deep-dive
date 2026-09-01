@@ -12,18 +12,18 @@
 
 ```
                     ┌──────────────────────────────┐
-                    │           CLI (cli.py)        │
-                    │  argparse + UTF-8 safe print  │
+                    │           CLI (cli.py)       │
+                    │  argparse + UTF-8 safe print │
                     └──────────────┬───────────────┘
                                    │
                                    ▼
                     ┌──────────────────────────────┐
                     │       Orchestrator           │
                     │  搜索矩阵 + 并行 dispatch     │
-                    │  + heartbeat + global watch   │
-                    └──┬─────────────┬─────────────┬┘
-                       │             │             │
-                       ▼             ▼             ▼
+                    │  + heartbeat + global watch  │
+                    └──┬─────────────┬────────────┬┘
+                       │             │            │
+                       ▼             ▼            ▼
         ┌────────────────────┐ ┌──────────────┐ ┌─────────────────┐
         │  Query classifier  │ │  Variants    │ │  Local langs    │
         │  (5 types + prio)  │ │  (5+视角)    │ │  (10 langs)     │
@@ -49,60 +49,60 @@
 ## 数据流（一次完整 run）
 
 ```
-           ┌──────────────────────────────┐
+           ┌───────────────────────────────┐
 Input:     │  query + Config + cookies     │
-           └────────────┬─────────────────┘
+           └────────────┬──────────────────┘
                         │
                         ▼
-           ┌──────────────────────────────┐
-Step 0:   │  generate_variants(query)     │  →  dict[perspective, query]
-Step 1:   │  detect_query_kind(query)     │  →  QueryKind enum
-Step 2:   │  detect_local_langs(query)    │  →  list[LocalLang]
-Step 3:   │  build_search_matrix(...)     │  →  list[MatrixRow]
-           └────────────┬─────────────────┘
+           ┌───────────────────────────────┐
+Step 0:    │  generate_variants(query)     │  →  dict[perspective, query]
+Step 1:    │  detect_query_kind(query)     │  →  QueryKind enum
+Step 2:    │  detect_local_langs(query)    │  →  list[LocalLang]
+Step 3:    │  build_search_matrix(...)     │  →  list[MatrixRow]
+           └────────────┬──────────────────┘
                         │
                         ▼
-           ┌──────────────────────────────┐
-Step 4:   │  Parallel dispatch            │
-          │   for row in matrix:           │
-          │     submit(_run_one_task, ...)│  →  list[TaskResult]
-           └────────────┬─────────────────┘
+           ┌───────────────────────────────┐
+Step 4:    │  Parallel dispatch            │
+           │   for row in matrix:          │
+           │     submit(_run_one_task, ...)│  →  list[TaskResult]
+           └────────────┬──────────────────┘
                         │
                         ▼
-           ┌──────────────────────────────┐
-Step 5:   │  aggregate(task_results, ...) │  →  AggregatedResult
-          │  - walk raw/*/metadata.json   │
-          │  - dedup URLs (canonical)     │
-          │  - record source_task per URL │
-           └────────────┬─────────────────┘
+           ┌───────────────────────────────┐
+Step 5:    │  aggregate(task_results, ...) │  →  AggregatedResult
+           │  - walk raw/*/metadata.json   │
+           │  - dedup URLs (canonical)     │
+           │  - record source_task per URL │
+           └────────────┬──────────────────┘
                         │
                         ▼
-           ┌──────────────────────────────┐
-Step 6:   │  auto_rescue_raw(...)         │  →  writes <topic>_raw_all.txt
-          │   if dedup==0 OR first run    │
-           └────────────┬─────────────────┘
+           ┌───────────────────────────────┐
+Step 6:    │  auto_rescue_raw(...)         │  →  writes <topic>_raw_all.txt
+           │   if dedup==0 OR first run    │
+           └────────────┬──────────────────┘
                         │
                         ▼
-           ┌──────────────────────────────┐
-Step 7:   │  build_report(...)            │  →  report.md (4 sections)
-           └────────────┬─────────────────┘
+           ┌───────────────────────────────┐
+Step 7:    │  build_report(...)            │  →  report.md (4 sections)
+           └────────────┬──────────────────┘
                         │
                         ▼
-           ┌──────────────────────────────┐
-Step 8:   │  append_capy_section(...)     │  →  adds ## 卡皮观点 to report.md
-           └────────────┬─────────────────┘
+           ┌───────────────────────────────┐
+Step 8:    │  append_capy_section(...)     │  →  adds ## 卡皮观点 to report.md
+           └────────────┬──────────────────┘
                         │
                         ▼
-           ┌──────────────────────────────┐
-Output:   │  CrawlResult(topic, task_results, aggregated, report_path) │
-           └──────────────────────────────┘
+           ┌────────────────────────────────────────────────────────────┐
+Output:    │  CrawlResult(topic, task_results, aggregated, report_path) │
+           └────────────────────────────────────────────────────────────┘
 ```
 
 ## 关键设计权衡
 
 ### 为什么用 src/ layout
 
-- **避免 import 冲突**：项目根目录不能有 `deep_dive/` 包，否则会被自动发现并覆盖 src 版本()。
+- **避免 import 冲突**：项目根目录不能有 `deep_dive/` 包，否则会被自动发现并覆盖 `src/deep_dive/` 版本。
 - **PEP 517 友好**：`pyproject.toml` 的 `package-dir = {"" = "src"}` 让 `pip install -e .` 干净工作。
 - **测试无需安装**：`conftest.py` 把 `src/` 插到 sys.path 首位，pytest 不依赖安装步骤。
 
@@ -114,7 +114,7 @@ Output:   │  CrawlResult(topic, task_results, aggregated, report_path) │
 
 ### 为什么 smart_filter_urls 在多个层调用
 
-- **Engine 层**：返回 URL 后过滤一遍()
+- **Engine 层**：返回 URL 后立即过一遍 `smart_filter_urls`
 - **Aggregator 层**：跨 task 再去重时也基于 canonical
 - **双层冗余但语义不同**：engine 层防止低质 URL 进入抓取；aggregator 层防止重复 task 写同一个 URL
 
@@ -140,7 +140,7 @@ Stage 2: 核心实体 (2+ 字中文/3+ 字英文) 命中率 ≥ 34%
 
 ### 为什么自动救援 (auto_rescue_raw) 即使有数据也跑
 
-一个早期 fix：guard 条件 `if total_urls > 0: skip` 永远 true。修复后改为"raw_all.txt 已存在才跳过"，让用户任何时候都有 fallback 可读。这是设计上的"宁可冗余不丢失"原则。
+`auto_rescue_raw` 的生成条件是"`<topic>_raw_all.txt` 已存在且 > 1 KB 才跳过"。这一设计保证用户任何时候跑完都有 fallback 可读，原始数据不丢。
 
 ### 为什么 Logger 不全局劫持 print
 

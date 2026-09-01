@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from deep_dive.constants import VARIANT_KEYS
 from deep_dive.query_variants import has_variant
-
-# _chinese_to_english has been removed; see TestChineseToEnglish skip below.
-_chinese_to_english = None
 
 
 class TestHasVariant:
@@ -23,5 +17,3 @@ class TestHasVariant:
     def test_missing_key(self):
         v = {}
         assert has_variant(v, "a") is False
-
-

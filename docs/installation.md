@@ -50,9 +50,7 @@ python -m deep_dive --version
 ### Tavily
 
 ```powershell
-$env:TAVILY_API_KEY = "tvly-..."
-# 备份 key（双 key 自动 fallback）
-$env:TAVILY_API_KEY_BACKUP = "tvly-..."
+$env:TAVILY_API_KEYS = "tvly-key1,tvly-key2,tvly-key3"   # 推荐：N-key 池
 
 # 持久化：写入 PowerShell profile
 Add-Content $PROFILE "`n`$env:TAVILY_API_KEY='tvly-...'"
@@ -101,7 +99,7 @@ python -m deep_dive --query "test installation" --depth quick --no-tavily
 - [ ] `python --version` ≥ 3.10
 - [ ] `pip list | findstr deep-dive` 显示 1.0.0
 - [ ] `python -m deep_dive --version` 输出 `deep-dive 1.0.0`
-- [ ] `python -m pytest tests/ -q` 输出 `241 passed`
+- [ ] `python -m pytest tests/ -q` 输出 `all passed`
 - [ ] `playwright --version` 输出浏览器版本号
 - [ ] `python -m deep_dive --query "test" --depth quick` 生成 report.md（即使内容少）
 

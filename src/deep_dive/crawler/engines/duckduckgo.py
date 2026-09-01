@@ -39,10 +39,11 @@ from deep_dive.constants import TAG_ERR, TAG_OK
 from deep_dive.logging_setup import safe_print
 from deep_dive.types import SearchHit
 
-from .base import SearchEngine, SearchEngineError, SearchEngineTimeoutError
+from .base import SearchEngine, SearchEngineError
 
 try:
     import requests as _requests
+
     _HAS_REQUESTS = True
 except ImportError:  # pragma: no cover
     _HAS_REQUESTS = False
@@ -107,18 +108,21 @@ class DuckDuckGoEngine(SearchEngine):
         self._throttle_lock = threading.Lock()
         self._session = _requests.Session() if _HAS_REQUESTS else None
         if self._session is not None:
-            self._session.headers.update({
-                "User-Agent": user_agent or (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "Accept": (
-                    "text/html,application/xhtml+xml,application/xml;"
-                    "q=0.9,image/avif,image/webp,*/*;q=0.8"
-                ),
-                "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-            })
+            self._session.headers.update(
+                {
+                    "User-Agent": user_agent
+                    or (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": (
+                        "text/html,application/xhtml+xml,application/xml;"
+                        "q=0.9,image/avif,image/webp,*/*;q=0.8"
+                    ),
+                    "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+                }
+            )
 
     # -- Throttling ------------------------------------------------------
 
@@ -159,39 +163,26 @@ class DuckDuckGoEngine(SearchEngine):
             except _requests.RequestException as e:
                 # Network-level failure; try next endpoint. If both fail,
                 # surface as TimeoutError so the orchestrator can decide.
-                safe_print(
-                    f"{TAG_ERR} {self.name} {label} '{query[:30]}': "
-                    f"network {type(e).__name__}"
-                )
+                safe_print(f"{TAG_ERR} {self.name} {label} '{query[:30]}': network {type(e).__name__}")
                 continue
 
             if resp.status_code != 200:
-                safe_print(
-                    f"{TAG_ERR} {self.name} {label} '{query[:30]}': "
-                    f"HTTP {resp.status_code}"
-                )
+                safe_print(f"{TAG_ERR} {self.name} {label} '{query[:30]}': HTTP {resp.status_code}")
                 continue
             html = resp.text or ""
             if any(c.lower() in html.lower() for c in _CAPTCHA_NEEDLES):
-                safe_print(
-                    f"{TAG_ERR} {self.name} {label} '{query[:30]}': captcha; "
-                    "skipping endpoint"
-                )
+                safe_print(f"{TAG_ERR} {self.name} {label} '{query[:30]}': captcha; skipping endpoint")
                 continue
             if len(html) < 500:
                 # Suspiciously short — probably an error page.
                 continue
 
-            extracted = (
-                self._parse_lite(html) if label == "lite" else self._parse_html(html)
-            )
+            extracted = self._parse_lite(html) if label == "lite" else self._parse_html(html)
             if extracted:
                 hits = extracted[: self.max_results_per_endpoint]
                 break
 
-        safe_print(
-            f"{TAG_OK} {self.name} '{query[:30]}' -> {len(hits)} URLs"
-        )
+        safe_print(f"{TAG_OK} {self.name} '{query[:30]}' -> {len(hits)} URLs")
         return hits[:topk]
 
     # -- Parsers ---------------------------------------------------------

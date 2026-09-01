@@ -10,8 +10,8 @@ Pipeline:
     2. ``path`` → trailing slash stripped (unless ``/`` itself)
     3. ``query`` → tracking params stripped, remaining params sorted
 
-The original behavior is preserved for compatibility — if you rely on
-the exact output of the legacy function, see ``test_canonical.py``.
+    Output is stable across versions. For behavioural assertions,
+    see ``test_canonical.py``.
 """
 
 from __future__ import annotations
@@ -77,8 +77,8 @@ def canonicalize_url(url: str) -> str:
 
     Returns:
         Canonical form. If the input cannot be parsed, it's returned
-        unchanged (this matches legacy behavior — fail-soft, don't
-        blow up a whole task over one weird URL).
+        unchanged (fail-soft: don't blow up a whole task over
+        one weird URL).
     """
     try:
         p = urlparse(url)

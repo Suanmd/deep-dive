@@ -20,7 +20,7 @@ All modules are importable independently for unit testing.
 
 from __future__ import annotations
 
-from .blacklist import is_black_domain, is_baidu_domain, is_lowq_domain, is_spam_domain
+from .blacklist import is_baidu_domain, is_black_domain, is_lowq_domain, is_spam_domain
 from .cookies import load_cookies, match_cookies_to_url
 from .extraction import extract_main_text, looks_like_block_page
 

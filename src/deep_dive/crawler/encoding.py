@@ -26,6 +26,7 @@ import re
 
 try:
     from charset_normalizer import from_bytes as _cn_from_bytes
+
     _HAS_CHARSET_NORMALIZER = True
 except ImportError:  # pragma: no cover
     _HAS_CHARSET_NORMALIZER = False
@@ -41,13 +42,13 @@ except ImportError:  # pragma: no cover
 # Chinese content while still covering other major scripts.
 _CANDIDATE_ENCODINGS: tuple[str, ...] = (
     "utf-8",
-    "gb18030",   # Mainland China (superset of GBK, also covers all Unicode)
+    "gb18030",  # Mainland China (superset of GBK, also covers all Unicode)
     "gbk",
     "gb2312",
-    "big5",      # Taiwan / Hong Kong
-    "euc-kr",    # Korean
-    "shift_jis", # Japanese
-    "euc-jp",    # Japanese (rare)
+    "big5",  # Taiwan / Hong Kong
+    "euc-kr",  # Korean
+    "shift_jis",  # Japanese
+    "euc-jp",  # Japanese (rare)
     "iso-8859-1",
     "windows-1252",
 )
@@ -138,7 +139,6 @@ def smart_decode_bytes(
         try:
             detected = _cn_from_bytes(
                 content[:65536],
-                candidates=list(_CANDIDATE_ENCODINGS),
             ).best()
             if detected and detected.encoding:
                 decoded = _try_decode(content, detected.encoding)

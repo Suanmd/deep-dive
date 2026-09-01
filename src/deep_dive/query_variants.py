@@ -12,10 +12,7 @@ API:
 
 from __future__ import annotations
 
-from typing import Any
-
 from deep_dive.types import ResearchPlan
-
 
 # Mapping of plan.variants keys → matrix task note labels. Used by
 # build_search_matrix_from_plan() to label rows.
@@ -61,25 +58,49 @@ def generate_variants_from_plan(plan: ResearchPlan) -> dict[str, str]:
     """
     out: dict[str, str] = {"original": plan.query}
 
+    # Track every query we've already accepted so subsequent slots with
+    # identical text are dropped (first-seen wins).
+    seen: set[str] = {plan.query}
+
     # English baseline query — prefer first plan-supplied term; fall back
     # to the original query if no English terms were supplied (LLM decided
     # the query is zh-only).
     en_terms = list(plan.english_search_terms)
     if en_terms:
-        out["en_query"] = en_terms[0]
+        en_q = en_terms[0].strip()
+        # If the English baseline collides with the original (e.g. zh
+        # query with no English terms → en_query == original), don't
+        # add a duplicate; we'll fall back to the original below.
+        if en_q and en_q not in seen:
+            out["en_query"] = en_q
+            seen.add(en_q)
+        else:
+            out["en_query"] = plan.query
     else:
         out["en_query"] = plan.query
 
     # Chinese variants from plan
     for key, query in plan.variants.items():
-        if query and query.strip():
-            out[key] = query.strip()
+        if not query or not query.strip():
+            continue
+        q = query.strip()
+        if q in seen:
+            # Duplicate — skip. Keep first-seen.
+            continue
+        seen.add(q)
+        out[key] = q
 
     # English variant / academic if multiple English terms supplied
     if len(en_terms) >= 2:
-        out["en_variant"] = en_terms[1]
+        q = en_terms[1].strip()
+        if q and q not in seen:
+            out["en_variant"] = q
+            seen.add(q)
     if len(en_terms) >= 3:
-        out["en_academic"] = en_terms[2]
+        q = en_terms[2].strip()
+        if q and q not in seen:
+            out["en_academic"] = q
+            seen.add(q)
 
     return out
 

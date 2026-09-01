@@ -17,19 +17,7 @@
 
 ## 检测逻辑
 
-```python
-def detect_query_kind(query: str) -> QueryKind:
-    if not query:
-        return GENERAL
-    q_lower = query.lower()
-    matched = set()
-    for kind, cfg in QUERY_TYPES.items():
-        for kw in cfg["keywords"]:
-            if kw.lower() in q_lower:
-                matched.add(kind)
-                break
-    return priority_resolve(matched)  # humanities > academic > tech > ...
-```
+实际 `detect_kind` 走 3 步（先拼写 compact、查 tech 缩写 / AI 实验室品牌，然后关键词打分）。完整实现在 `src/deep_dive/types.py`，文档不重复伪代码，直接引用源码即可。
 
 ## 触发示例
 

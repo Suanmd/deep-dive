@@ -15,11 +15,11 @@ API:
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from deep_dive.constants import LOWQ_DOMAINS, MEDIUM_ALTERNATIVES
 from deep_dive.types import QueryKind, ResearchPlan
-
 
 # Plan.kind strings accepted. Anything else → QueryKind.GENERAL.
 _KIND_MAP: dict[str, QueryKind] = {
@@ -121,10 +121,25 @@ def all_medium_alternatives() -> tuple[str, ...]:
 # Tokens that should NEVER be considered when matching site domain to
 # english_search_terms. Pure engineering constants (TLDs, common
 # prefixes, subdomains) — not LLM-supplied decisions.
-_SITE_TOKEN_STOPWORDS: frozenset[str] = frozenset({
-    "com", "co", "org", "net", "io", "ai", "cn", "uk", "jp", "de", "fr",
-    "www", "blog", "docs", "wiki",
-})
+_SITE_TOKEN_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "com",
+        "co",
+        "org",
+        "net",
+        "io",
+        "ai",
+        "cn",
+        "uk",
+        "jp",
+        "de",
+        "fr",
+        "www",
+        "blog",
+        "docs",
+        "wiki",
+    }
+)
 
 # Subdomain prefixes stripped before substring generation. We don't
 # try to enumerate every TLD — instead we let substrings containing

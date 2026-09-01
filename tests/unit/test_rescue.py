@@ -34,9 +34,7 @@ class TestAutoRescue:
         (topic / "topic__run1_raw_all.txt").write_text("X" * 2000, encoding="utf-8")
         _write_txt(raw / "task_00" / "a.txt", "Some text " * 50)
 
-        result = auto_rescue_raw(
-            topic_dir=topic, raw_dir=raw, aggregated=_empty_aggregated()
-        )
+        result = auto_rescue_raw(topic_dir=topic, raw_dir=raw, aggregated=_empty_aggregated())
         # Returned the existing path without rewriting
         assert result[2] is not None
         assert "raw_all.txt" in result[2]
@@ -45,9 +43,7 @@ class TestAutoRescue:
         topic = tmp_path / "topic__run1"
         topic.mkdir()
         # raw/ does not exist
-        result = auto_rescue_raw(
-            topic_dir=topic, raw_dir=topic / "raw", aggregated=_empty_aggregated()
-        )
+        result = auto_rescue_raw(topic_dir=topic, raw_dir=topic / "raw", aggregated=_empty_aggregated())
         assert result[2] is None
 
     def test_no_txt_files(self, tmp_path):
@@ -56,9 +52,7 @@ class TestAutoRescue:
         raw = topic / "raw"
         raw.mkdir()
         # Empty raw
-        result = auto_rescue_raw(
-            topic_dir=topic, raw_dir=raw, aggregated=_empty_aggregated()
-        )
+        result = auto_rescue_raw(topic_dir=topic, raw_dir=raw, aggregated=_empty_aggregated())
         assert result[2] is None
 
     def test_builds_raw_all_from_txt(self, tmp_path):

@@ -13,7 +13,7 @@ Both modules are pure-Python with no I/O, so they're trivially testable.
 
 from __future__ import annotations
 
-from .canonical import canonicalize_url, strip_tracking, sort_query_params
+from .canonical import canonicalize_url, sort_query_params, strip_tracking
 from .url_filter import (
     FilterStats,
     smart_filter_urls,

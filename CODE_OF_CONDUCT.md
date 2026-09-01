@@ -62,8 +62,8 @@ reported to the community leaders responsible for enforcement via
 [GitHub Security Advisories](https://github.com/Suanmd/deep-dive/security/advisories/new).
 All complaints will be reviewed and investigated promptly and fairly.
 
-All community leaders are obligated to respect the privacy and security of
-the reporter of any incident.
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
 
 ## Enforcement Guidelines
 
@@ -98,9 +98,8 @@ sustained inappropriate behaviour.
 
 **Consequence**: A temporary ban from any sort of public interaction with the
 community for a specified period of time. No public or private interaction
-with the people involved, including unsolicited interaction with those
-enforcing the Code of Conduct, is allowed during this period. Violating these
-terms may lead to a permanent ban.
+with the people involved, including those enforcing the Code of Conduct, is
+allowed during this period. Violating these terms may lead to a permanent ban.
 
 ### 4. Permanent Ban
 

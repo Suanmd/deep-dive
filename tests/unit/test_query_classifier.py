@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from deep_dive.query_classifier import all_medium_alternatives
-from deep_dive.types import QueryKind
 
 
 class TestMediumAlternatives:
@@ -32,6 +29,7 @@ class TestPickSiteQuery:
 
     def test_picks_term_with_site_token_lmsys(self):
         from deep_dive.query_classifier import pick_site_query
+
         terms = (
             "LLM leaderboard 2026 Chatbot Arena LMSYS",
             "Open LLM Leaderboard Hugging Face 2026",
@@ -41,6 +39,7 @@ class TestPickSiteQuery:
 
     def test_picks_term_with_site_token_huggingface(self):
         from deep_dive.query_classifier import pick_site_query
+
         terms = (
             "LLM leaderboard 2026 Chatbot Arena LMSYS",
             "Open LLM Leaderboard Hugging Face 2026",
@@ -56,6 +55,7 @@ class TestPickSiteQuery:
         its own specialised term.
         """
         from deep_dive.query_classifier import pick_site_query
+
         terms = (
             "LLM leaderboard 2026 Chatbot Arena LMSYS",
             "Open LLM Leaderboard Hugging Face 2026",
@@ -72,20 +72,24 @@ class TestPickSiteQuery:
 
     def test_falls_back_when_no_substring_overlap(self):
         from deep_dive.query_classifier import pick_site_query
+
         terms = ("LLM leaderboard 2026 Chatbot Arena",)
         # zhihu.com → no 4+ char substring matches "LLM leaderboard…"
         assert pick_site_query("zhihu.com", terms, fallback="中文 知乎") == "中文 知乎"
 
     def test_falls_back_when_terms_empty(self):
         from deep_dive.query_classifier import pick_site_query
+
         assert pick_site_query("lmsys.org", [], fallback="default") == "default"
 
     def test_falls_back_when_terms_is_none(self):
         from deep_dive.query_classifier import pick_site_query
+
         assert pick_site_query("lmsys.org", None, fallback="default") == "default"
 
     def test_strips_www_subdomain(self):
         from deep_dive.query_classifier import pick_site_query
+
         terms = ("LLM leaderboard 2026 Chatbot Arena LMSYS", "other")
         # www.lmsys.org and lmsys.org should pick the same term.
         r1 = pick_site_query("www.lmsys.org", terms, fallback="fb")
@@ -94,24 +98,28 @@ class TestPickSiteQuery:
 
     def test_strips_docs_subdomain(self):
         from deep_dive.query_classifier import pick_site_query
+
         terms = ("Python tutorial docs reference", "Java guide")
         # docs.python.org → token "python" matches terms[0]
         assert pick_site_query("docs.python.org", terms, fallback="fb") == terms[0]
 
     def test_case_insensitive(self):
         from deep_dive.query_classifier import pick_site_query
+
         terms = ("Hugging Face Open LLM Leaderboard",)
         # Mixed case site still matches.
         assert pick_site_query("HUGGINGFACE.CO", terms, fallback="fb") == terms[0]
 
     def test_tie_breaks_to_earliest_index(self):
         from deep_dive.query_classifier import pick_site_query
+
         # Both terms mention "lmsys" equally — earliest index wins.
         terms = ("abc lmsys test", "xyz lmsys other")
         assert pick_site_query("lmsys.org", terms, fallback="fb") == terms[0]
 
     def test_longer_substring_higher_score(self):
         from deep_dive.query_classifier import pick_site_query
+
         # terms[1] contains BOTH "arxiv" AND "papers" while terms[0]
         # only contains "papers"; terms[1] should win for arxiv.org.
         terms = ("papers 2026", "arxiv papers 2026")
@@ -119,6 +127,7 @@ class TestPickSiteQuery:
 
     def test_github_route_to_github_term(self):
         from deep_dive.query_classifier import pick_site_query
+
         terms = (
             "LLM leaderboard 2026 Chatbot Arena LMSYS",
             "Open LLM Leaderboard Hugging Face 2026",

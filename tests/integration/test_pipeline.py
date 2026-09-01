@@ -5,10 +5,6 @@ Uses a stub fetcher to exercise the full pipeline without network.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
 from deep_dive.crawler.fetchers.base import Fetcher
 from deep_dive.crawler.pipeline import CrawlPipeline, PipelineConfig
 from deep_dive.types import FetchStatus
@@ -19,9 +15,12 @@ class StubFetcher(Fetcher):
 
     name = "stub"
 
-    def __init__(self, url_to_response: dict[str, tuple[str, str]] | None = None,
-                 block_urls: set[str] | None = None,
-                 fail_urls: set[str] | None = None):
+    def __init__(
+        self,
+        url_to_response: dict[str, tuple[str, str]] | None = None,
+        block_urls: set[str] | None = None,
+        fail_urls: set[str] | None = None,
+    ):
         super().__init__(timeout_s=1.0)
         self.url_to_response = url_to_response or {}
         self.block_urls = block_urls or set()
@@ -59,12 +58,16 @@ class TestPipelineBasics:
         assert results == []
 
     def test_successful_fetch(self, tmp_output_dir):
-        fetcher = StubFetcher({
-            "https://example.com/a": (SAMPLE_HTML, "Sample Article Title"),
-        })
+        fetcher = StubFetcher(
+            {
+                "https://example.com/a": (SAMPLE_HTML, "Sample Article Title"),
+            }
+        )
         cfg = PipelineConfig(output_dir=tmp_output_dir, main_query="article", enable_relevance_check=False)
         # Override relevance check off (text doesn't have many query matches)
-        cfg = PipelineConfig(output_dir=tmp_output_dir, main_query="article technology", enable_relevance_check=False)
+        cfg = PipelineConfig(
+            output_dir=tmp_output_dir, main_query="article technology", enable_relevance_check=False
+        )
         pipeline = CrawlPipeline(cfg, primary_fetcher=fetcher)
         results = pipeline.run(["https://example.com/a"], source_task="test")
         assert len(results) == 1
@@ -88,9 +91,11 @@ class TestPipelineBasics:
         assert results[0].status == FetchStatus.FAILED
 
     def test_metadata_persisted(self, tmp_output_dir):
-        fetcher = StubFetcher({
-            "https://example.com/a": (SAMPLE_HTML, "Sample"),
-        })
+        fetcher = StubFetcher(
+            {
+                "https://example.com/a": (SAMPLE_HTML, "Sample"),
+            }
+        )
         cfg = PipelineConfig(output_dir=tmp_output_dir, main_query="sample", enable_relevance_check=False)
         pipeline = CrawlPipeline(cfg, primary_fetcher=fetcher)
         pipeline.run(["https://example.com/a"], source_task="test_task")
@@ -98,9 +103,11 @@ class TestPipelineBasics:
         assert metadata_path.exists()
 
     def test_url_mapping_persisted(self, tmp_output_dir):
-        fetcher = StubFetcher({
-            "https://example.com/a": (SAMPLE_HTML, "Sample"),
-        })
+        fetcher = StubFetcher(
+            {
+                "https://example.com/a": (SAMPLE_HTML, "Sample"),
+            }
+        )
         cfg = PipelineConfig(output_dir=tmp_output_dir, main_query="sample", enable_relevance_check=False)
         pipeline = CrawlPipeline(cfg, primary_fetcher=fetcher)
         pipeline.run(["https://example.com/a"], source_task="test_task")
@@ -111,18 +118,22 @@ class TestPipelineBasics:
 class TestPipelineRelevance:
     def test_relevance_check_drops_irrelevant(self, tmp_output_dir):
         # Article with NO overlap to query
-        fetcher = StubFetcher({
-            "https://example.com/irrelevant": (SAMPLE_HTML, "Random Article"),
-        })
+        fetcher = StubFetcher(
+            {
+                "https://example.com/irrelevant": (SAMPLE_HTML, "Random Article"),
+            }
+        )
         cfg = PipelineConfig(output_dir=tmp_output_dir, main_query="黄金投资", enable_relevance_check=True)
         pipeline = CrawlPipeline(cfg, primary_fetcher=fetcher)
         results = pipeline.run(["https://example.com/irrelevant"], source_task="test")
         assert results[0].status == FetchStatus.IRRELEVANT
 
     def test_relevance_check_disabled(self, tmp_output_dir):
-        fetcher = StubFetcher({
-            "https://example.com/anything": (SAMPLE_HTML, "Random"),
-        })
+        fetcher = StubFetcher(
+            {
+                "https://example.com/anything": (SAMPLE_HTML, "Random"),
+            }
+        )
         cfg = PipelineConfig(output_dir=tmp_output_dir, main_query="黄金投资", enable_relevance_check=False)
         pipeline = CrawlPipeline(cfg, primary_fetcher=fetcher)
         results = pipeline.run(["https://example.com/anything"], source_task="test")

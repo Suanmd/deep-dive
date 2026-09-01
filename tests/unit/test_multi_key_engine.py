@@ -14,7 +14,6 @@ from deep_dive.crawler.engines.base import (
     EngineAccountPool,
     EngineCredential,
     MultiKeyEngine,
-    SearchEngine,
     SearchEngineAuthError,
     SearchEngineError,
     SearchEngineNetworkError,
@@ -23,35 +22,41 @@ from deep_dive.crawler.engines.base import (
 )
 from deep_dive.types import SearchHit
 
-
 # ---------------------------------------------------------------------------
 # EngineAccountPool state machine
 # ---------------------------------------------------------------------------
 
+
 class TestEngineAccountPool:
     def test_next_active_returns_first_cred(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
         assert pool.next_active().name == "KEY1"
 
     def test_mark_exhausted_skips_to_next(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-            EngineCredential(name="KEY3", key="c"),
-        ])
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+                EngineCredential(name="KEY3", key="c"),
+            ]
+        )
         pool.mark_exhausted("KEY1")
         assert pool.next_active().name == "KEY2"
         pool.mark_exhausted("KEY2")
         assert pool.next_active().name == "KEY3"
 
     def test_returns_none_when_all_exhausted(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
         pool.mark_exhausted("KEY1")
         pool.mark_exhausted("KEY2")
         assert pool.next_active() is None
@@ -65,9 +70,11 @@ class TestEngineAccountPool:
         assert pool.total_count == 0
 
     def test_reset_clears_exhausted_state(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-        ])
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+            ]
+        )
         pool.mark_exhausted("KEY1")
         assert pool.is_fully_exhausted
         pool.reset()
@@ -76,9 +83,7 @@ class TestEngineAccountPool:
 
     def test_thread_safety(self):
         """Concurrent mark_exhausted / next_active should not lose updates."""
-        pool = EngineAccountPool([
-            EngineCredential(name=f"KEY{i}", key=str(i)) for i in range(50)
-        ])
+        pool = EngineAccountPool([EngineCredential(name=f"KEY{i}", key=str(i)) for i in range(50)])
         errors: list[str] = []
 
         def exhaust_one(name: str):
@@ -87,10 +92,7 @@ class TestEngineAccountPool:
             except Exception as e:
                 errors.append(f"mark: {e}")
 
-        threads = [
-            threading.Thread(target=exhaust_one, args=(f"KEY{i}",))
-            for i in range(50)
-        ]
+        threads = [threading.Thread(target=exhaust_one, args=(f"KEY{i}",)) for i in range(50)]
         for t in threads:
             t.start()
         for t in threads:
@@ -99,11 +101,13 @@ class TestEngineAccountPool:
         assert pool.is_fully_exhausted
 
     def test_active_and_exhausted_names(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="A", key="a"),
-            EngineCredential(name="B", key="b"),
-            EngineCredential(name="C", key="c"),
-        ])
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="A", key="a"),
+                EngineCredential(name="B", key="b"),
+                EngineCredential(name="C", key="c"),
+            ]
+        )
         pool.mark_exhausted("B")
         assert pool.active_names == ("A", "C")
         assert pool.exhausted_names == ("B",)
@@ -112,6 +116,7 @@ class TestEngineAccountPool:
 # ---------------------------------------------------------------------------
 # MultiKeyEngine rotation logic
 # ---------------------------------------------------------------------------
+
 
 class _StubEngine(MultiKeyEngine):
     """Records the credential order; returns a fixed hit list per credential.
@@ -143,16 +148,19 @@ class _StubEngine(MultiKeyEngine):
         if cred.name in self.errors_per_cred:
             err_cls = self.errors_per_cred[cred.name]
             raise err_cls(f"{cred.name} simulated {err_cls.__name__}")
-        return [SearchHit(url=f"https://example.com/{cred.name}",
-                          title=f"hit from {cred.name}", engine=self.name)]
+        return [
+            SearchHit(url=f"https://example.com/{cred.name}", title=f"hit from {cred.name}", engine=self.name)
+        ]
 
 
 class TestMultiKeyRotation:
     def test_first_cred_succeeds(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
         engine = _StubEngine(pool)
         hits = engine.search("test", 10)
         assert len(hits) == 1
@@ -165,13 +173,18 @@ class TestMultiKeyRotation:
 
     def test_first_cred_quota_rotates_to_second(self):
         """KEY1 quota → KEY2 success. Audit trail records both."""
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
-        engine = _StubEngine(pool, errors_per_cred={
-            "KEY1": SearchEngineQuotaError,
-        })
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
+        engine = _StubEngine(
+            pool,
+            errors_per_cred={
+                "KEY1": SearchEngineQuotaError,
+            },
+        )
         hits = engine.search("test", 10)
         assert len(hits) == 1
         assert hits[0].title == "hit from KEY2"
@@ -182,50 +195,70 @@ class TestMultiKeyRotation:
         assert audit["keys_exhausted"] == ["KEY1"]
 
     def test_first_cred_auth_rotates_to_second(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
-        engine = _StubEngine(pool, errors_per_cred={
-            "KEY1": SearchEngineAuthError,
-        })
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
+        engine = _StubEngine(
+            pool,
+            errors_per_cred={
+                "KEY1": SearchEngineAuthError,
+            },
+        )
         hits = engine.search("test", 10)
         assert hits[0].title == "hit from KEY2"
 
     def test_first_cred_network_rotates_to_second(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
-        engine = _StubEngine(pool, errors_per_cred={
-            "KEY1": SearchEngineNetworkError,
-        })
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
+        engine = _StubEngine(
+            pool,
+            errors_per_cred={
+                "KEY1": SearchEngineNetworkError,
+            },
+        )
         hits = engine.search("test", 10)
         assert hits[0].title == "hit from KEY2"
 
     def test_first_cred_timeout_rotates_to_second(self):
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
-        engine = _StubEngine(pool, errors_per_cred={
-            "KEY1": SearchEngineTimeoutError,
-        })
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
+        engine = _StubEngine(
+            pool,
+            errors_per_cred={
+                "KEY1": SearchEngineTimeoutError,
+            },
+        )
         hits = engine.search("test", 10)
         assert hits[0].title == "hit from KEY2"
 
     def test_all_creds_quota_raises_quota_error(self):
         """All N keys quota-exhausted → only THEN declare engine dead."""
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-            EngineCredential(name="KEY3", key="c"),
-        ])
-        engine = _StubEngine(pool, errors_per_cred={
-            "KEY1": SearchEngineQuotaError,
-            "KEY2": SearchEngineNetworkError,
-            "KEY3": SearchEngineQuotaError,
-        })
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+                EngineCredential(name="KEY3", key="c"),
+            ]
+        )
+        engine = _StubEngine(
+            pool,
+            errors_per_cred={
+                "KEY1": SearchEngineQuotaError,
+                "KEY2": SearchEngineNetworkError,
+                "KEY3": SearchEngineQuotaError,
+            },
+        )
         with pytest.raises(SearchEngineQuotaError) as exc_info:
             engine.search("test", 10)
         # The error message should mention all 3 keys tried.
@@ -240,13 +273,18 @@ class TestMultiKeyRotation:
 
     def test_non_retryable_error_propagates_immediately(self):
         """SearchEngineError (not in RETRYABLE_ERRORS) → stop rotation, propagate."""
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
-        engine = _StubEngine(pool, errors_per_cred={
-            "KEY1": SearchEngineError,  # NOT retryable
-        })
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
+        engine = _StubEngine(
+            pool,
+            errors_per_cred={
+                "KEY1": SearchEngineError,  # NOT retryable
+            },
+        )
         with pytest.raises(SearchEngineError):
             engine.search("test", 10)
         # KEY2 should NOT be tried; rotation stops on non-retryable.
@@ -254,33 +292,38 @@ class TestMultiKeyRotation:
 
     def test_first_cred_succeeds_after_quota_then_second_skipped(self):
         """Successful credential wins; later creds in the pool are not touched."""
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
         engine = _StubEngine(pool)  # No errors → KEY1 succeeds
-        hits = engine.search("test", 10)
+        engine.search("test", 10)
         assert engine.tried_order == ["KEY1"]  # KEY2 never consulted
 
     def test_audit_isolated_per_thread(self):
         """Two threads calling search() on the same engine see separate audits."""
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
-        engine = _StubEngine(pool)
-
         # Thread A: succeed on KEY1
         # Thread B: succeed on KEY2 (force by patching errors_per_cred
         # at call time — we use separate engine instances since the stub
         # shares errors_per_cred state. Easiest: build two engines.)
-        engine_a = _StubEngine(EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-        ]))
-        engine_b = _StubEngine(EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ]), errors_per_cred={"KEY1": SearchEngineQuotaError})
+        engine_a = _StubEngine(
+            EngineAccountPool(
+                [
+                    EngineCredential(name="KEY1", key="a"),
+                ]
+            )
+        )
+        engine_b = _StubEngine(
+            EngineAccountPool(
+                [
+                    EngineCredential(name="KEY1", key="a"),
+                    EngineCredential(name="KEY2", key="b"),
+                ]
+            ),
+            errors_per_cred={"KEY1": SearchEngineQuotaError},
+        )
 
         results: dict[str, dict] = {}
 
@@ -290,8 +333,10 @@ class TestMultiKeyRotation:
 
         ta = threading.Thread(target=worker, args=("A", engine_a))
         tb = threading.Thread(target=worker, args=("B", engine_b))
-        ta.start(); tb.start()
-        ta.join(); tb.join()
+        ta.start()
+        tb.start()
+        ta.join()
+        tb.join()
 
         # A succeeded on KEY1 only; B rotated KEY1 → KEY2.
         assert results["A"]["key_used"] == "KEY1"
@@ -311,13 +356,18 @@ class TestMultiKeyAuditAndPoolState:
         calls, but the audit dict is fresh each call so the
         orchestrator records only the current call's rotation.
         """
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
-        engine = _StubEngine(pool, errors_per_cred={
-            "KEY1": SearchEngineQuotaError,
-        })
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
+        engine = _StubEngine(
+            pool,
+            errors_per_cred={
+                "KEY1": SearchEngineQuotaError,
+            },
+        )
         # First call: KEY1 quota → KEY2 success
         engine.search("test", 10)
         audit1 = engine.get_audit()
@@ -334,13 +384,18 @@ class TestMultiKeyAuditAndPoolState:
 
     def test_pool_reset_restores_exhausted_creds(self):
         """User can manually reset() to retry quota'd keys (e.g., after wait)."""
-        pool = EngineAccountPool([
-            EngineCredential(name="KEY1", key="a"),
-            EngineCredential(name="KEY2", key="b"),
-        ])
-        engine = _StubEngine(pool, errors_per_cred={
-            "KEY1": SearchEngineQuotaError,
-        })
+        pool = EngineAccountPool(
+            [
+                EngineCredential(name="KEY1", key="a"),
+                EngineCredential(name="KEY2", key="b"),
+            ]
+        )
+        engine = _StubEngine(
+            pool,
+            errors_per_cred={
+                "KEY1": SearchEngineQuotaError,
+            },
+        )
         engine.search("test", 10)
         assert "KEY1" in engine.pool.exhausted_names
         engine.pool.reset()
@@ -350,6 +405,7 @@ class TestMultiKeyAuditAndPoolState:
 # ---------------------------------------------------------------------------
 # Engine wiring (pool carries engine_name)
 # ---------------------------------------------------------------------------
+
 
 class TestPoolNaming:
     def test_pool_name_round_trips(self):
@@ -370,6 +426,7 @@ class TestPoolNaming:
 # to claim "KEY1 -> KEY2 fallback" which made it look like only 2 keys
 # worked; the pool actually supports N via EngineAccountPool and these
 # tests lock that in so it can't regress silently).
+
 
 class TestTavilyEngineNKeyFallback:
     """Real TavilyEngine: N-key sequential fallback, not just 2."""
@@ -423,9 +480,7 @@ class TestTavilyEngineNKeyFallback:
                     ]
                 }
 
-        with patch(
-            "deep_dive.crawler.engines.tavily.TavilyClient", MockTavily
-        ):
+        with patch("deep_dive.crawler.engines.tavily.TavilyClient", MockTavily):
             hits = engine.search("test query", topk=3)
 
         audit = engine.get_audit()
@@ -461,10 +516,7 @@ class TestTavilyEngineNKeyFallback:
         from deep_dive.crawler.engines.tavily import TavilyEngine
 
         pool = EngineAccountPool(
-            [
-                EngineCredential(name=f"KEY{i + 1}", key=f"key-{i}-fake")
-                for i in range(5)
-            ],
+            [EngineCredential(name=f"KEY{i + 1}", key=f"key-{i}-fake") for i in range(5)],
             name="tavily-test",
         )
         engine = TavilyEngine(pool=pool, timeout_s=5)
@@ -476,11 +528,11 @@ class TestTavilyEngineNKeyFallback:
             def search(self, query, max_results):
                 raise Exception(f"429 quota exceeded for {self.api_key}")
 
-        with patch(
-            "deep_dive.crawler.engines.tavily.TavilyClient", MockTavily
+        with (
+            patch("deep_dive.crawler.engines.tavily.TavilyClient", MockTavily),
+            pytest.raises(SearchEngineQuotaError),
         ):
-            with pytest.raises(SearchEngineQuotaError):
-                engine.search("test", 3)
+            engine.search("test", 3)
 
         # All 5 keys exhausted after this single call.
         assert engine.pool.is_fully_exhausted
@@ -517,19 +569,15 @@ class TestTavilyEngineNKeyFallback:
         # Pool has exactly the 4 env-var keys, named KEY1..KEY4.
         cred_names = [c.name for c in engine.pool.credentials]
         cred_keys = [c.key for c in engine.pool.credentials]
-        assert cred_names == ["KEY1", "KEY2", "KEY3", "KEY4"], (
-            f"credential names wrong: {cred_names}"
-        )
-        assert cred_keys == ["k1", "k2", "k3", "k4"], (
-            f"credential keys wrong: {cred_keys}"
-        )
+        assert cred_names == ["KEY1", "KEY2", "KEY3", "KEY4"], f"credential names wrong: {cred_names}"
+        assert cred_keys == ["k1", "k2", "k3", "k4"], f"credential keys wrong: {cred_keys}"
         assert engine.pool.total_count == 4
 
     def test_env_var_TAVILY_API_KEYS_rotates_through_all_n_keys(self):
         """Same env var, but force rotation through ALL N keys.
 
         k1..k(N-1) fail with quota; kN succeeds. Verifies the env-var
-        pool supports arbitrary-length rotation, not just 2-key.
+        pool supports arbitrary-length rotation.
         """
         import os
         from unittest.mock import patch
@@ -547,12 +595,7 @@ class TestTavilyEngineNKeyFallback:
                 if self.api_key in {"k1", "k2", "k3"}:
                     raise Exception(f"429 quota exceeded for {self.api_key}")
                 # k4 succeeds
-                return {
-                    "results": [
-                        {"url": f"https://x/{self.api_key}/0",
-                         "title": "ok", "content": ""}
-                    ]
-                }
+                return {"results": [{"url": f"https://x/{self.api_key}/0", "title": "ok", "content": ""}]}
 
         with patch.dict(
             os.environ,
@@ -563,15 +606,11 @@ class TestTavilyEngineNKeyFallback:
             },
         ):
             engine = TavilyEngine(timeout_s=5)
-            with patch(
-                "deep_dive.crawler.engines.tavily.TavilyClient", MockTavily
-            ):
+            with patch("deep_dive.crawler.engines.tavily.TavilyClient", MockTavily):
                 hits = engine.search("test", 5)
 
         # All 4 keys from env var were attempted, in pool order.
-        assert constructed == ["k1", "k2", "k3", "k4"], (
-            f"env var keys not tried in order: {constructed}"
-        )
+        assert constructed == ["k1", "k2", "k3", "k4"], f"env var keys not tried in order: {constructed}"
         # k4 succeeded; k1..k3 exhausted.
         assert engine.get_audit()["key_used"] == "KEY4"
         assert engine.get_audit()["keys_exhausted"] == ["KEY1", "KEY2", "KEY3"]

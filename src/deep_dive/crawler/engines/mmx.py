@@ -43,9 +43,9 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import threading
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from deep_dive.constants import QUOTA_KEYWORDS, TAG_MMX_ERR, TAG_MMX_OK, TAG_MMX_QUOTA
 from deep_dive.logging_setup import safe_print
@@ -59,7 +59,6 @@ from .base import (
     SearchEngineQuotaError,
     SearchEngineTimeoutError,
 )
-
 
 # Cache the resolved mmx path (avoid re-running shutil.which per query).
 # Sentinel: ``False`` means "not yet searched"; ``str`` = found path;
@@ -197,17 +196,19 @@ class MMXEngine(MultiKeyEngine):
             # credential-level failure. Surface as plain
             # SearchEngineError so the rotation stops.
             safe_print(
-                f"{TAG_MMX_ERR} {cred.name}: mmx CLI not found "
-                f"(path={cred.path!r}); skipping '{query[:30]}'"
+                f"{TAG_MMX_ERR} {cred.name}: mmx CLI not found (path={cred.path!r}); skipping '{query[:30]}'"
             )
-            raise SearchEngineError(
-                f"{self.name}: mmx CLI not found on PATH "
-                f"(credential={cred.name})"
-            )
+            raise SearchEngineError(f"{self.name}: mmx CLI not found on PATH (credential={cred.name})")
 
         cmd = [
-            mmx_path, "search", "query",
-            "--q", query, "--output", "json", "--quiet",
+            mmx_path,
+            "search",
+            "query",
+            "--q",
+            query,
+            "--output",
+            "json",
+            "--quiet",
         ]
         cmd.extend(cred.args)
 
@@ -233,21 +234,13 @@ class MMXEngine(MultiKeyEngine):
                 # race documented in legacy comments.
                 res = fut.result(timeout=self.timeout_s + 5)
         except (concurrent.futures.TimeoutError, subprocess.TimeoutExpired) as e:
-            safe_print(
-                f"{TAG_MMX_ERR} {cred.name} timeout after {self.timeout_s}s: "
-                f"'{query[:30]}'"
-            )
-            raise SearchEngineTimeoutError(
-                f"mmx {cred.name} timeout: {query}"
-            ) from e
+            safe_print(f"{TAG_MMX_ERR} {cred.name} timeout after {self.timeout_s}s: '{query[:30]}'")
+            raise SearchEngineTimeoutError(f"mmx {cred.name} timeout: {query}") from e
         except FileNotFoundError as e:
             safe_print(f"{TAG_MMX_ERR} {cred.name} executable disappeared: {e}")
             raise SearchEngineError(f"mmx {cred.name} executable gone: {e}") from e
         except Exception as e:
-            safe_print(
-                f"{TAG_MMX_ERR} {cred.name} '{query[:30]}': "
-                f"{type(e).__name__}: {e}"
-            )
+            safe_print(f"{TAG_MMX_ERR} {cred.name} '{query[:30]}': {type(e).__name__}: {e}")
             raise SearchEngineError(str(e)) from e
 
         combined = (res.stdout or "") + (res.stderr or "")
@@ -262,12 +255,9 @@ class MMXEngine(MultiKeyEngine):
             # in stderr; they contain one of the well-known keywords.
             if _looks_like_quota(combined_err):
                 safe_print(
-                    f"{TAG_MMX_QUOTA} {cred.name} exit={res.returncode} "
-                    f"quota-like stderr: '{query[:30]}'"
+                    f"{TAG_MMX_QUOTA} {cred.name} exit={res.returncode} quota-like stderr: '{query[:30]}'"
                 )
-                raise SearchEngineQuotaError(
-                    f"mmx {cred.name} quota (exit {res.returncode})"
-                )
+                raise SearchEngineQuotaError(f"mmx {cred.name} quota (exit {res.returncode})")
             # Otherwise this is a genuine subprocess failure (bad query,
             # version mismatch, network proxy corruption, etc.). Surface
             # as a permanent error so we don't waste rotations on a
@@ -277,9 +267,7 @@ class MMXEngine(MultiKeyEngine):
                 f"{TAG_MMX_ERR} {cred.name} exit={res.returncode} "
                 f"'{query[:30]}': stderr={(res.stderr or '')[:200]}"
             )
-            raise SearchEngineError(
-                f"mmx {cred.name} exit {res.returncode}: {query}"
-            )
+            raise SearchEngineError(f"mmx {cred.name} exit {res.returncode}: {query}")
 
         try:
             data = json.loads(res.stdout)
@@ -288,10 +276,7 @@ class MMXEngine(MultiKeyEngine):
             # with the CLI (corrupt output, version mismatch, network
             # proxy corruption, etc.). Surface as plain SearchEngineError
             # so we don't waste rotations on a version-mismatched binary.
-            safe_print(
-                f"{TAG_MMX_ERR} {cred.name} bad JSON: {e}; "
-                f"stdout_head={(res.stdout or '')[:100]}"
-            )
+            safe_print(f"{TAG_MMX_ERR} {cred.name} bad JSON: {e}; stdout_head={(res.stdout or '')[:100]}")
             raise SearchEngineError(f"mmx {cred.name} bad JSON: {e}") from e
 
         organic = data.get("organic")
@@ -311,10 +296,7 @@ class MMXEngine(MultiKeyEngine):
                     engine=self.name,
                 )
             )
-        safe_print(
-            f"{TAG_MMX_OK} {cred.name} '{_truncate_for_log(query, 50)}' "
-            f"-> {len(hits)} URLs"
-        )
+        safe_print(f"{TAG_MMX_OK} {cred.name} '{_truncate_for_log(query, 50)}' -> {len(hits)} URLs")
         return hits[:topk]
 
 

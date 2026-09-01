@@ -6,7 +6,7 @@
 
 ```
 tmp/deep-dive/
-└── <topic-slug>__<run-id>/                # 例如：search__20260823_101831
+└── <topic-slug>__<run-id>/                # 例如：search__YYDDMM_HHMMSS
     ├── report.md                          # 主报告（4 段式 + 卡皮观点）
     ├── summary.json                       # 任务元数据（机器可读）
     ├── <topic>_raw_all.txt                # auto_rescue 拼救的全文（可选）
@@ -166,7 +166,7 @@ deep-dive 还会在 report.md 末尾追加「## 🎀 卡皮观点」section，�
       "status": "success",
       "url_count": 18,
       "duration_seconds": 12.4,
-      "output_dir": "tmp/deep-dive/search__20260823_101831/raw/task_00",
+      "output_dir": "tmp/deep-dive/search__YYDDMM_HHMMSS/raw/task_00",
       "error": null
     },
     ...
@@ -338,8 +338,8 @@ def safe_filename(url):
 `auto_rescue_raw` 在 dedup=0 或 raw 已有内容时，写 `<topic>_raw_all.txt`：
 
 ```
-tmp/deep-dive/search__20260823_101831/
-└── search__20260823_101831_raw_all.txt    # 自动拼救的全文
+tmp/deep-dive/search__YYDDMM_HHMMSS/
+└── search__YYDDMM_HHMMSS_raw_all.txt    # 自动拼救的全文
 ```
 
 文件格式：
@@ -361,7 +361,7 @@ tmp/deep-dive/search__20260823_101831/
 ## debug/ 目录（仅 --debug 模式）
 
 ```
-tmp/deep-dive/search__20260823_101831/debug/
+tmp/deep-dive/search__YYDDMM_HHMMSS/debug/
 ├── heartbeat.log           # 每 10s 一次的进度心跳
 └── matrix.json             # 完整搜索矩阵（含所有 query 变体）
 ```
